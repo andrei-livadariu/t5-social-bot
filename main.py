@@ -8,8 +8,9 @@ from dotenv import load_dotenv
 from helpers.access_checker import AccessChecker
 from helpers.loyverse import LoyverseConnector
 from modules.help import HelpModule
+from modules.master import MasterModule
 from modules.points import PointsModule
-from modules.raffle import RaffleModule
+from modules.raffle import RaffleModule, Raffle
 from modules.birthday import BirthdayModule
 
 load_dotenv()
@@ -37,10 +38,12 @@ def main() -> None:
         point_masters=config.point_masters,
     )
 
+    raffle = Raffle(lc, ticket_price=5, max_tickets=3)
+
     modules = [
         HelpModule(),
         PointsModule(lc=lc, ac=ac),
-        RaffleModule(lc=lc, ac=ac),
+        RaffleModule(raffle=raffle, ac=ac),
         BirthdayModule(
             lc=lc,
             ac=ac,
