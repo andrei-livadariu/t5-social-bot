@@ -1,5 +1,5 @@
 from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, ContextTypes, filters
 
 from helpers.prompt_parser import parse
 
@@ -8,6 +8,7 @@ prompts = parse("resources/help_prompts.txt")
 
 class HelpModule:
     def install(self, application: Application) -> None:
+        application.add_handler(CommandHandler('start', self.__help, filters.Regex('help')))
         application.add_handler(CommandHandler("help", self.__help))
 
     async def __help(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
