@@ -28,7 +28,7 @@ countries = [
     'Italy',
     'Netherlands',
     'Poland',
-    'Portgal',
+    'Portugal',
     'Romania',
     'Scotland',
     'Serbia',

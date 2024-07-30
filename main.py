@@ -79,7 +79,7 @@ def main() -> None:
         checkpoints=config.visits_to_points
     )
 
-    raffle = Raffle(loy, entries=raffle_repository, title="Euro 2024 Sweepstakes", ticket_price=Points(5), max_tickets=3)
+    raffle = Raffle(loy, entries=raffle_repository, title="Euro 2024 Sweepstakes", ticket_price=Points(5), max_tickets=3, is_active=False)
 
     modules = [
         PointsModule(loy=loy, users=user_repository),
