@@ -11,7 +11,7 @@ from data.repositories.raffle import RaffleRepository
 from data.models.user import User
 from data.models.raffle_entry import RaffleEntry
 
-from integrations.google.sheet_database import GoogleSheetDatabase
+from integrations.google.sheet_database_table import GoogleSheetDatabaseTable
 
 countries = [
     'Albania',
@@ -42,7 +42,7 @@ countries = [
 
 
 class GoogleSheetRaffleRepository(RaffleRepository):
-    def __init__(self, database: GoogleSheetDatabase, timezone: pytz.timezone = None):
+    def __init__(self, table: GoogleSheetDatabaseTable, timezone: pytz.timezone = None):
         self.timezone = timezone
 
         self.entries: list[RaffleEntry] = []
@@ -52,8 +52,8 @@ class GoogleSheetRaffleRepository(RaffleRepository):
         # so any data operation needs to be protected
         self.lock = rwlock.RWLockWrite()
 
-        self.database = database
-        self.database.raffle.subscribe(self._load)
+        self._table = table
+        self._table.data.subscribe(self._load)
 
     def get_by_user(self, user: User) -> list[RaffleEntry]:
         with self.lock.gen_rlock():
@@ -77,7 +77,7 @@ class GoogleSheetRaffleRepository(RaffleRepository):
             else:
                 self.entries_by_full_name[entry.full_name] = [entry]
 
-            self.database.add_raffle_entry(self._to_row(entry))
+            self._table.insert(self._to_row(entry))
 
             return entry
 

@@ -10,13 +10,13 @@ from data.repositories.event import EventRepository
 from data.models.event import Event
 
 from integrations.google.handle import Handle
-from integrations.google.sheet_database import GoogleSheetDatabase
+from integrations.google.sheet_database_table import GoogleSheetDatabaseTable
 
 EventHandle = Handle[Event]
 
 
 class GoogleSheetEventRepository(EventRepository):
-    def __init__(self, database: GoogleSheetDatabase, timezone: pytz.timezone = None):
+    def __init__(self, table: GoogleSheetDatabaseTable, timezone: pytz.timezone = None):
         self.timezone = timezone
 
         # The repository data can be read and refreshed from different threads,
@@ -26,7 +26,7 @@ class GoogleSheetEventRepository(EventRepository):
         self.events: list[EventHandle] = []
         self.events_by_date: dict[date, list[EventHandle]] = {}
 
-        database.events.subscribe(self._load)
+        table.data.subscribe(self._load)
 
     def get_all_events(self) -> list[Event]:
         with self.lock.gen_rlock():

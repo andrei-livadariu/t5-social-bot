@@ -9,13 +9,13 @@ from data.repositories.task import TaskRepository
 from data.models.task import Task
 
 from integrations.google.handle import Handle
-from integrations.google.sheet_database import GoogleSheetDatabase
+from integrations.google.sheet_database_tasks_table import GoogleSheetDatabaseTasksTable
 
 TaskHandle = Handle[Task]
 
 
 class GoogleSheetTaskRepository(TaskRepository):
-    def __init__(self, database: GoogleSheetDatabase, timezone: pytz.timezone = None):
+    def __init__(self, table: GoogleSheetDatabaseTasksTable, timezone: pytz.timezone = None):
         self.timezone = timezone
 
         self.tasks: list[TaskHandle] = []
@@ -24,8 +24,8 @@ class GoogleSheetTaskRepository(TaskRepository):
         # so any data operation needs to be protected
         self.lock = rwlock.RWLockWrite()
 
-        self.database = database
-        database.tasks.subscribe(self._load)
+        self._table = table
+        self._table.data.subscribe(self._load)
 
     def get_tasks_between(self, start: datetime, end: datetime) -> list[Task]:
         weekday = start.weekday()
@@ -43,7 +43,7 @@ class GoogleSheetTaskRepository(TaskRepository):
             if existing:
                 existing.inner = new_task
 
-            self.database.check_task(self._to_row(new_task))
+            self._table.check_task(self._to_row(new_task))
 
         return new_task
 

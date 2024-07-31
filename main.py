@@ -64,10 +64,10 @@ def main() -> None:
         api_credentials=config.google_api_credentials,
     )
 
-    event_repository = GoogleSheetEventRepository(database, config.timezone)
-    user_repository = GoogleSheetUserRepository(database, config.timezone)
-    task_repository = GoogleSheetTaskRepository(database, config.timezone)
-    raffle_repository = GoogleSheetRaffleRepository(database, config.timezone)
+    event_repository = GoogleSheetEventRepository(database.events, config.timezone)
+    user_repository = GoogleSheetUserRepository(database.users, config.timezone)
+    task_repository = GoogleSheetTaskRepository(database.tasks, config.timezone)
+    raffle_repository = GoogleSheetRaffleRepository(database.raffle, config.timezone)
 
     loy = LoyverseApi(config.loyverse_token, users=user_repository, read_only=config.loyverse_read_only)
     ac = AccessChecker(

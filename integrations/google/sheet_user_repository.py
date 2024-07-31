@@ -11,13 +11,13 @@ from data.models.user import User
 from data.models.user_role import UserRole
 
 from integrations.google.handle import Handle
-from integrations.google.sheet_database import GoogleSheetDatabase
+from integrations.google.sheet_database_table import GoogleSheetDatabaseTable
 
 UserHandle = Handle[User]
 
 
 class GoogleSheetUserRepository(UserRepository):
-    def __init__(self, database: GoogleSheetDatabase, timezone: pytz.timezone = None):
+    def __init__(self, table: GoogleSheetDatabaseTable, timezone: pytz.timezone = None):
         self.timezone = timezone
 
         self.users: list[UserHandle] = []
@@ -32,8 +32,8 @@ class GoogleSheetUserRepository(UserRepository):
         # so any data operation needs to be protected
         self.lock = rwlock.RWLockWrite()
 
-        self.database = database
-        database.users.subscribe(self._load)
+        self._table = table
+        self._table.data.subscribe(self._load)
 
     def get_by_full_name(self, full_name: str) -> Optional[User]:
         with self.lock.gen_rlock():
@@ -98,8 +98,7 @@ class GoogleSheetUserRepository(UserRepository):
                 diff_data[user.full_name] = diff
 
             # Save changes to the database as well
-            if diff_data:
-                self.database.save_users('full_name', diff_data)
+            self._table.update(diff_data)
 
     def _load(self, raw_data: list[dict[str, str]]) -> None:
         with self.lock.gen_wlock():
