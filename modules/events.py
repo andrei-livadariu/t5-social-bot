@@ -18,11 +18,12 @@ logger = logging.getLogger(__name__)
 
 
 class EventsModule(BaseModule):
-    def __init__(self, ac: AccessChecker, repository: EventRepository, timezone: pytz.timezone = None, upcoming_days: int = 6, admin_chats: set[ChatTarget] = None):
+    def __init__(self, ac: AccessChecker, repository: EventRepository, timezone: pytz.timezone = None, upcoming_days: int = 6, announcement_chats: set[ChatTarget] = None, admin_chats: set[ChatTarget] = None):
         self.ac = ac
         self.repository = repository
         self.timezone = timezone
         self.upcoming_days = upcoming_days
+        self.announcement_chats: set[ChatTarget] = (announcement_chats or set()).copy()
         self.admin_chats: set[ChatTarget] = (admin_chats or set()).copy()
 
     def install(self, application: Application) -> None:
@@ -33,8 +34,8 @@ class EventsModule(BaseModule):
             CallbackQueryHandler(self._display_events, pattern='^events/list$'),
         ])
 
-        daily_time = time(0, 0, 0, 0, self.timezone)
-        application.job_queue.run_daily(self._announce_advance_events, daily_time, days=(0,))
+        application.job_queue.run_daily(self._announce_events_admin, time(0, 0, 0, 0, self.timezone), days=(0,))
+        application.job_queue.run_daily(self._announce_events_public, time(8, 0, 0, 0, self.timezone), days=(1,))
 
         logger.info('Events module installed')
 
@@ -76,7 +77,7 @@ class EventsModule(BaseModule):
         else:
             return "Sadly, Mici has eaten all our hosts so there are no events happening any time soon."
 
-    async def _announce_advance_events(self, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def _announce_events_admin(self, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not self.admin_chats:
             return
 
@@ -88,6 +89,21 @@ class EventsModule(BaseModule):
             announcement = f"⚠️ There are no upcoming events in the next {self.upcoming_days + 1} days. Remember to add some in the Google sheet! ⚠️"
 
         for target in self.admin_chats:
+            await context.bot.send_message(target.chat_id, announcement, parse_mode=ParseMode.HTML, message_thread_id=target.thread_id)
+
+    async def _announce_events_public(self, context: ContextTypes.DEFAULT_TYPE) -> None:
+        if not self.announcement_chats:
+            return
+
+        upcoming_text = self._format_upcoming(datetime.now(self.timezone), self.upcoming_days + 1)
+
+        # Don't announce anything if there are no upcoming events
+        if not upcoming_text:
+            return
+
+        announcement = f"<b>This Week at T5:</b>\n\n{upcoming_text}"
+
+        for target in self.announcement_chats:
             await context.bot.send_message(target.chat_id, announcement, parse_mode=ParseMode.HTML, message_thread_id=target.thread_id)
 
     def _format_today(self, now: datetime) -> str:
