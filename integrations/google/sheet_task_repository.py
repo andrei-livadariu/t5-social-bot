@@ -45,9 +45,18 @@ class GoogleSheetTaskRepository(TaskRepository):
             if existing:
                 existing.inner = new_task
 
-            self._table.check_task(self._to_row(new_task))
+            self._table.toggle(self._to_row(new_task))
 
         return new_task
+
+    def clear(self, target: datetime) -> None:
+        with self.lock.gen_wlock():
+            task_handles = self.tasks_by_weekday.get(target.weekday(), [])
+            for handle in task_handles:
+                handle.inner = handle.inner.copy(is_done=False)
+
+            self._table.clear(target.weekday())
+
 
     def _load(self, raw_data: list[dict[str, str]]) -> None:
         with self.lock.gen_wlock():

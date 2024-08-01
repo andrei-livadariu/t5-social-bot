@@ -12,3 +12,7 @@ class TaskRepository(ABC):
     @abstractmethod
     def toggle(self, task: Task) -> Task:
         pass
+
+    @abstractmethod
+    def clear(self, target: datetime) -> None:
+        pass

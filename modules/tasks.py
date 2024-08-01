@@ -28,10 +28,14 @@ class TasksModule(BaseModule):
             CallbackQueryHandler(self._toggle, pattern="^tasks/toggle/"),
         ])
 
+        application.job_queue.run_daily(self._clear_day, time(7, 40, 0, 0, self.timezone))
         application.job_queue.run_daily(self._send_am_tasks, time(7, 50, 0, 0, self.timezone))
         application.job_queue.run_daily(self._send_pm_tasks, time(15, 50, 0, 0, self.timezone))
 
         logger.info("Tasks module installed")
+
+    async def _clear_day(self, context: ContextTypes.DEFAULT_TYPE):
+        self.tasks.clear(datetime.now(self.timezone))
 
     async def _send_am_tasks(self, context: ContextTypes.DEFAULT_TYPE):
         await self._send_tasks(

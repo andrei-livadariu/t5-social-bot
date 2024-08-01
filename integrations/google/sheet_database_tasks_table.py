@@ -1,6 +1,6 @@
 import logging
 
-from gspread.utils import Dimension
+from gspread.utils import Dimension, rowcol_to_a1
 
 from integrations.google.sheet_database_table import GoogleSheetDatabaseTable
 
@@ -13,7 +13,7 @@ weekday_cols = len(weekday_keys)
 class GoogleSheetDatabaseTasksTable(GoogleSheetDatabaseTable):
     _dimension = Dimension.cols
 
-    def check_task(self, task: dict[str,str]) -> None:
+    def toggle(self, task: dict[str,str]) -> None:
         try:
             # Load the data from Google
             spreadsheet = self._database.load()
@@ -28,6 +28,21 @@ class GoogleSheetDatabaseTasksTable(GoogleSheetDatabaseTable):
                 if task['name'] == current_task['name'] and task['time'] == current_task['time']:
                     worksheet.update_cell(row_number, column_number, task['is_done'])
                     return
+        except Exception as e:
+            logger.exception(e)
+
+    def clear(self, weekday: int) -> None:
+        try:
+            # Load the data from Google
+            spreadsheet = self._database.load()
+            worksheet = self._load_worksheet(spreadsheet)
+
+            column_number = weekday * weekday_cols + weekday_keys['is_done'] + 1
+
+            coordinate = rowcol_to_a1(1, column_number)
+            column_name = ''.join([i for i in coordinate if not i.isdigit()])
+
+            worksheet.batch_clear([f"{column_name}:{column_name}"])
         except Exception as e:
             logger.exception(e)
 
