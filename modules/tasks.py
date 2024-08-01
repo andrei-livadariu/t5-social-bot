@@ -110,8 +110,7 @@ class TasksModule(BaseModule):
             await update.callback_query.edit_message_text(str(e))
         except Exception as e:
             logger.exception(e)
-            await update.callback_query.answer()
-            await update.callback_query.edit_message_text(f"BeeDeeBeeBoop 🤖 Error : {e}")
+            # Don't update the message with the exception text because we lose the buttons with the tasks
 
     @staticmethod
     def _format_task(task: Task) -> str:

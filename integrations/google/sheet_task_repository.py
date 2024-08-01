@@ -1,6 +1,7 @@
 import pytz
 
 from typing import Optional
+from itertools import groupby
 from datetime import datetime, time
 
 from readerwriterlock import rwlock
@@ -19,6 +20,7 @@ class GoogleSheetTaskRepository(TaskRepository):
         self.timezone = timezone
 
         self.tasks: list[TaskHandle] = []
+        self.tasks_by_weekday: dict[int, list[TaskHandle]] = {}
 
         # The repository data can be read and refreshed from different threads,
         # so any data operation needs to be protected
@@ -31,7 +33,7 @@ class GoogleSheetTaskRepository(TaskRepository):
         weekday = start.weekday()
         start_time = start.time()
         end_time = end.time()
-        tasks = [task.inner for task in self.tasks if task.inner.weekday == weekday and start_time <= task.inner.time < end_time]
+        tasks = [task.inner for task in self.tasks_by_weekday.get(weekday, []) if start_time <= task.inner.time < end_time]
         return tasks
 
     def toggle(self, task: Task) -> Task:
@@ -49,26 +51,27 @@ class GoogleSheetTaskRepository(TaskRepository):
 
     def _load(self, raw_data: list[dict[str, str]]) -> None:
         with self.lock.gen_wlock():
-            last_times = [self._parse_time('08:00') for i in range(0, 7)]
-            self.tasks = []
-            for row in raw_data:
-                task = self._from_row(row, last_times)
-                if task:
-                    last_times[task.weekday] = task.time
-                    self.tasks.append(TaskHandle(task))
+            raw_tasks = [self._from_row(row) for row in raw_data]
+            self.tasks = [TaskHandle(task) for task in raw_tasks if task]
 
-    def _from_row(self, row: dict[str, str], last_times: list[time]) -> Optional[Task]:
-        # If the name is not provided, this indicates an empty row
+            sorted_by_weekday = sorted(self.tasks, key=lambda handle: handle.inner.weekday)
+            self.tasks_by_weekday = {key: list(group) for key, group in groupby(sorted_by_weekday, key=lambda handle: handle.inner.weekday)}
+
+    def _from_row(self, row: dict[str, str]) -> Optional[Task]:
+        # The task name is required because it's used for matching
         name = row.get('name', '').strip()
         if not name:
             return None
 
-        weekday = int(row['weekday'])
+        task_time = GoogleSheetTaskRepository._parse_time(row.get('time', '').strip())
+        if not task_time:
+            return None
+
         return Task(
-            weekday=weekday,
-            time=GoogleSheetTaskRepository._parse_time(row.get('time', '').strip()) or last_times[weekday],
+            weekday=int(row['weekday']),
+            time=task_time,
             name=name,
-            is_done=row['is_done'] != ''
+            is_done=row.get('is_done', '') != ''
         )
 
     @staticmethod

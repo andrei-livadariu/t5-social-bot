@@ -6,34 +6,27 @@ from integrations.google.sheet_database_table import GoogleSheetDatabaseTable
 
 logger = logging.getLogger(__name__)
 
+weekday_keys = {'time': 0, 'name': 1, 'is_done': 2}
+weekday_cols = len(weekday_keys)
+
 
 class GoogleSheetDatabaseTasksTable(GoogleSheetDatabaseTable):
+    _dimension = Dimension.cols
+
     def check_task(self, task: dict[str,str]) -> None:
         try:
             # Load the data from Google
             spreadsheet = self._database.load()
             worksheet = self._load_worksheet(spreadsheet)
-            raw = worksheet.get_values(major_dimension=Dimension.cols)
-
-            keys = ['time', 'name', 'is_done']
-            cols = len(keys)
+            raw = self._load_values(worksheet)
 
             weekday = int(task['weekday'])
-            start = weekday * cols
-            filtered_columns = raw[start:(start + cols)]
-            zipped_rows = list(zip(*filtered_columns))
-            keyed_rows = [dict(zip(keys, row)) for row in zipped_rows]
+            column_number = weekday * weekday_cols + weekday_keys['is_done'] + 1
+            tasks = self._parse_weekday(raw, weekday)
 
-            last_time = ''
-            for i, row in enumerate(keyed_rows):
-                name = row.get('name', '').strip()
-                if not name:
-                    continue
-                time = row.get('time', '').strip() or last_time
-                last_time = time
-
-                if task['name'] == name and task['time'] == time:
-                    worksheet.update_cell(i + 1, start + 2 + 1, task['is_done'])
+            for row_number, current_task in tasks.items():
+                if task['name'] == current_task['name'] and task['time'] == current_task['time']:
+                    worksheet.update_cell(row_number, column_number, task['is_done'])
                     return
         except Exception as e:
             logger.exception(e)
@@ -44,22 +37,45 @@ class GoogleSheetDatabaseTasksTable(GoogleSheetDatabaseTable):
     def update(self, data: dict[str, dict[str,str]]):
         pass
 
-    def _parse(self, raw: list[list]) -> list[dict]:
-        weekdays = [day for day in raw[0] if day]
-        if len(weekdays) != 7:
-            raise ValueError("The sheet does not contain the necessary weekdays")
+    def _parse(self, raw: list[list]) -> list[dict[str, str]]:
+        tasks_by_weekday = [self._parse_weekday(raw, weekday).values() for weekday in range(0, 7)]
+        flat = [task for weekday_tasks in tasks_by_weekday for task in weekday_tasks]
+        return flat
 
-        keys = ['time', 'name', 'is_done']
-        cols = len(keys)
+    def _parse_weekday(self, raw: list[list], weekday: int) -> dict[int, dict[str, str]]:
+        # This method preserves the row numbers from the Google Sheet as they are used for updating
+        start = weekday * weekday_cols
+        end = start + weekday_cols
 
-        tasks = []
+        if len(raw) <= start:
+            raise ValueError("The sheet does not contain the requested weekday")
 
-        for row in raw[2:]:
-            for weekday in range(0, len(row) // cols):
-                start = weekday * cols
-                end = start + cols
-                task = dict(zip(keys, row[start:end]))
-                task['weekday'] = weekday
-                tasks.append(task)
+        # Fill any missing columns at the end with blanks
+        if len(raw) < end:
+            for i in range(len(raw), end):
+                raw.append([''] * len(raw[0]))
+
+        raw_today = list(zip(*raw[start:end]))
+
+        tasks = {}
+
+        last_time = ''
+        for i, row in enumerate(raw_today):
+            task = dict(zip(weekday_keys.keys(), row))
+
+            # Skip tasks with empty names; this handles the various table headers
+            name = task.get('name', '').strip()
+            if not name:
+                continue
+            task['name'] = name
+
+            # Fill in the missing time
+            time = task.get('time', '').strip()
+            if time:
+                last_time = time
+            task['time'] = last_time
+
+            task['weekday'] = weekday
+            tasks[i + 1] = task
 
         return tasks
