@@ -2,7 +2,7 @@ import logging
 import requests
 import json
 import pytz
-from typing import Optional, Generator
+from typing import Optional, Generator, Tuple
 from datetime import datetime
 
 import helpers.json
@@ -76,6 +76,13 @@ class LoyverseApi:
 
             if not cursor or len(raw_receipts) < limit:
                 break
+
+    def get_all_points(self) -> Generator[Tuple[User, Points], None, None]:
+        for customer in self._get_all_customers():
+            user = self.get_user_by_customer_id(customer.customer_id)
+            if not user:
+                continue
+            yield user, customer.points
 
     def get_user_by_customer_id(self, customer_id: str) -> Optional[User]:
         user = self.users.get_by_loyverse_id(customer_id)

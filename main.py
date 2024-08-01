@@ -82,7 +82,7 @@ def main() -> None:
     raffle = Raffle(loy, entries=raffle_repository, title="Euro 2024 Sweepstakes", ticket_price=Points(5), max_tickets=3, is_active=False)
 
     modules = [
-        PointsModule(loy=loy, users=user_repository),
+        PointsModule(loy=loy, users=user_repository, timezone=config.timezone),
         DonateModule(loy=loy, ac=ac, users=user_repository, announcement_chats=config.announcement_chats),
         VisitsModule(loy=loy, users=user_repository, vc=vc, timezone=config.timezone),
         RaffleModule(raffle=raffle, users=user_repository),

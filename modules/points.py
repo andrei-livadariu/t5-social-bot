@@ -1,14 +1,18 @@
+import pytz
 import logging
+from datetime import datetime, time
 
 from telegram import Update, InlineKeyboardButton
 from telegram.constants import ChatType
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
 from data.models.user import User
+from data.models.user_role import UserRole
 from data.repositories.user import UserRepository
 
 from modules.base_module import BaseModule
 from helpers.exceptions import UserFriendlyError
+from helpers.points import Points
 
 from messages import points_balance_sarcasm
 
@@ -18,9 +22,10 @@ logger = logging.getLogger(__name__)
 
 
 class PointsModule(BaseModule):
-    def __init__(self, loy: LoyverseApi, users: UserRepository):
+    def __init__(self, loy: LoyverseApi, users: UserRepository, timezone: pytz.timezone = None):
         self.loy = loy
         self.users = users
+        self.timezone = timezone
 
     def install(self, application: Application) -> None:
         application.add_handlers([
@@ -28,6 +33,8 @@ class PointsModule(BaseModule):
             CallbackQueryHandler(self._balance, pattern="^points/balance$"),
         ])
         logger.info("Points module installed")
+
+        application.job_queue.run_daily(self._send_reminders, time(12, 0, 0, 0, self.timezone), days=(1,))
 
     def get_menu_buttons(self) -> list[list[InlineKeyboardButton]]:
         return [
@@ -58,6 +65,21 @@ class PointsModule(BaseModule):
             await update.callback_query.edit_message_text(reply, disable_web_page_preview=True)
         else:
             await update.message.reply_html(reply, disable_web_page_preview=True)
+
+    async def _send_reminders(self, context: ContextTypes.DEFAULT_TYPE) -> None:
+        # Every 2 weeks = only even week numbers; this is not perfect but it works
+        if datetime.now(self.timezone).isocalendar().week % 2 != 0:
+            return
+
+        for user, points in self.loy.get_all_points():
+            if self._should_send_reminder(user, points):
+                balance = points.to_integral()
+                sarc = points_balance_sarcasm.random
+                message = f"{sarc}\n\nYou have {balance} T5 Loyalty Point{balance.plural}!\n\nRemember to spend your points at the bar when you visit! Not sure how? Ask our staff for guidance!"
+                await context.bot.send_message(user.telegram_id, message)
+
+    def _should_send_reminder(self, user: User, points: Points) -> bool:
+        return user.telegram_id and user.role != UserRole.STAFF and points > Points(15) and (datetime.now(self.timezone) - user.last_visit).days < 60
 
     def _validate_user(self, update: Update) -> User:
         sender_name = update.effective_user.username
