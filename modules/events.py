@@ -95,7 +95,7 @@ class EventsModule(BaseModule):
         if not self.announcement_chats:
             return
 
-        upcoming_text = self._format_upcoming(datetime.now(self.timezone), self.upcoming_days + 1)
+        upcoming_text = self._format_upcoming(datetime.now(self.timezone), self.upcoming_days)
 
         # Don't announce anything if there are no upcoming events
         if not upcoming_text:
