@@ -160,4 +160,4 @@ class VisitsModule(BaseModule):
 
     @staticmethod
     def _can_earn_points(user: User) -> bool:
-        return user.role != UserRole.STAFF
+        return not user.role.is_staff

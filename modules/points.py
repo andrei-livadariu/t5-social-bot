@@ -79,7 +79,7 @@ class PointsModule(BaseModule):
                 await context.bot.send_message(user.telegram_id, message)
 
     def _should_send_reminder(self, user: User, points: Points) -> bool:
-        return user.telegram_id and user.role != UserRole.STAFF and points > Points(15) and (datetime.now(self.timezone) - user.last_visit).days < 60
+        return user.telegram_id and (not user.role.is_staff) and points > Points(15) and (datetime.now(self.timezone) - user.last_visit).days < 60
 
     def _validate_user(self, update: Update) -> User:
         sender_name = update.effective_user.username
