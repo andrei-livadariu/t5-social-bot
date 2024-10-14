@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date
 from abc import ABC, abstractmethod
 
 from data.models.task import Task
@@ -6,7 +6,7 @@ from data.models.task import Task
 
 class TaskRepository(ABC):
     @abstractmethod
-    def get_tasks_between(self, start: datetime, end: datetime) -> list[Task]:
+    def get_task_list(self, day: date, ampm: str) -> list[Task]:
         pass
 
     @abstractmethod
@@ -14,5 +14,5 @@ class TaskRepository(ABC):
         pass
 
     @abstractmethod
-    def clear(self, target: datetime) -> None:
+    def clear(self, target: date) -> None:
         pass

@@ -35,27 +35,20 @@ class TasksModule(BaseModule):
         logger.info("Tasks module installed")
 
     async def _clear_day(self, context: ContextTypes.DEFAULT_TYPE):
-        self.tasks.clear(datetime.now(self.timezone))
+        self.tasks.clear(datetime.now(self.timezone).date())
 
     async def _send_am_tasks(self, context: ContextTypes.DEFAULT_TYPE):
-        await self._send_tasks(
-            context,
-            datetime.now(self.timezone).replace(hour=8, minute=0, second=0, microsecond=0),
-            datetime.now(self.timezone).replace(hour=16, minute=0, second=0, microsecond=0)
-        )
+        await self._send_tasks(context, 'am')
 
     async def _send_pm_tasks(self, context: ContextTypes.DEFAULT_TYPE):
-        await self._send_tasks(
-            context,
-            datetime.now(self.timezone).replace(hour=16, minute=0, second=0, microsecond=0),
-            datetime.now(self.timezone).replace(hour=23, minute=59, second=59, microsecond=0),
-        )
+        await self._send_tasks(context, 'pm')
 
-    async def _send_tasks(self, context: ContextTypes.DEFAULT_TYPE, start: datetime, end: datetime) -> None:
-        task_list = self.tasks.get_tasks_between(start, end)
-        list_id = start.strftime('%Y_%m_%d_%p').lower()
+    async def _send_tasks(self, context: ContextTypes.DEFAULT_TYPE, ampm: str) -> None:
+        today = datetime.now(self.timezone).date()
+        task_list = self.tasks.get_task_list(today, ampm)
+        list_id = today.strftime('%Y_%m_%d').lower() + '_' + ampm
 
-        announcement = start.strftime('%A %p').upper()
+        announcement = (today.strftime('%A') + ' ' + ampm).upper()
 
         for target in self.tasks_chats:
             await context.bot.send_message(
@@ -84,27 +77,7 @@ class TasksModule(BaseModule):
             if len(list_id_tokens) < 4:
                 raise UserFriendlyError("There was an error and I could not find the task you selected. Please try again.")
 
-            start = datetime.now(self.timezone).replace(
-                year=int(list_id_tokens[0]),
-                month=int(list_id_tokens[1]),
-                day=int(list_id_tokens[2]),
-                hour=8 if list_id_tokens[3] == 'am' else 16,
-                minute=0,
-                second=0,
-                microsecond=0
-            )
-
-            end = datetime.now(self.timezone).replace(
-                year=int(list_id_tokens[0]),
-                month=int(list_id_tokens[1]),
-                day=int(list_id_tokens[2]),
-                hour=16 if list_id_tokens[3] == 'am' else 23,
-                minute=0 if list_id_tokens[3] == 'am' else 59,
-                second=0 if list_id_tokens[3] == 'am' else 59,
-                microsecond=0
-            )
-
-            task_list = self.tasks.get_tasks_between(start, end)
+            task_list = self.tasks.get_task_list(datetime.now(self.timezone).date(), list_id_tokens[3])
             task_list[task_id] = self.tasks.toggle(task_list[task_id])
 
             await update.callback_query.answer()

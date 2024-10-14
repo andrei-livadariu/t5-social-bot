@@ -2,7 +2,7 @@ import pytz
 
 from typing import Optional
 from itertools import groupby
-from datetime import datetime, time
+from datetime import time, date
 
 from readerwriterlock import rwlock
 
@@ -29,12 +29,22 @@ class GoogleSheetTaskRepository(TaskRepository):
         self._table = table
         self._table.data.subscribe(self._load)
 
-    def get_tasks_between(self, start: datetime, end: datetime) -> list[Task]:
-        weekday = start.weekday()
-        start_time = start.time()
-        end_time = end.time()
-        tasks = [task.inner for task in self.tasks_by_weekday.get(weekday, []) if start_time <= task.inner.time < end_time]
-        return tasks
+    def get_task_list(self, day: date, ampm: str) -> list[Task]:
+        weekday = day.weekday()
+        cutoff_time = time(16, 0, 0, 0)
+
+        task_list = self.tasks_by_weekday.get(weekday, [])
+
+        cutoff_point = 0
+        for i, task in enumerate(task_list):
+            if task.inner.time >= cutoff_time:
+                cutoff_point = i
+                break
+
+        if ampm == 'am':
+            return [task.inner for task in task_list[:cutoff_point]]
+        else:
+            return [task.inner for task in task_list[cutoff_point:]]
 
     def toggle(self, task: Task) -> Task:
         new_task = task.copy(is_done=not task.is_done)
@@ -49,7 +59,7 @@ class GoogleSheetTaskRepository(TaskRepository):
 
         return new_task
 
-    def clear(self, target: datetime) -> None:
+    def clear(self, target: date) -> None:
         with self.lock.gen_wlock():
             task_handles = self.tasks_by_weekday.get(target.weekday(), [])
             for handle in task_handles:
