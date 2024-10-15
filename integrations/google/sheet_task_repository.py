@@ -31,7 +31,7 @@ class GoogleSheetTaskRepository(TaskRepository):
 
     def get_task_list(self, day: date, ampm: str) -> list[Task]:
         weekday = day.weekday()
-        cutoff_time = time(16, 0, 0, 0)
+        cutoff_time = time(17, 0, 0, 0)
 
         task_list = self.tasks_by_weekday.get(weekday, [])
 
