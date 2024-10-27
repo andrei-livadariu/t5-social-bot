@@ -20,7 +20,7 @@ class GoogleSheetDatabase:
         self._users = GoogleSheetDatabaseTable(self, 'Community', 'full_name')
         self._events = GoogleSheetDatabaseTable(self, 'Events')
         self._raffle = GoogleSheetDatabaseTable(self, 'Raffle')
-        self._tasks = GoogleSheetDatabaseTasksTable(self, 'Team Checklist')
+        self._tasks = GoogleSheetDatabaseTasksTable(self, 'Checklist')
 
         self.refresh()
 
