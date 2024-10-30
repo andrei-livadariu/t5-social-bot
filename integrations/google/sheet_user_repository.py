@@ -212,7 +212,7 @@ class GoogleSheetUserRepository(UserRepository):
         return [alias for alias in clean if alias]
 
     @staticmethod
-    def _parse_user_role(user_role_string: str) -> Optional[UserRole]:
+    def _parse_user_role(user_role_string: str) -> UserRole:
         try:
             return UserRole(user_role_string.strip().lower())
         except ValueError:
