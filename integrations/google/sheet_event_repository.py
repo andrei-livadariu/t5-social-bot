@@ -1,11 +1,13 @@
 import pytz
+import re
 
-from datetime import date, datetime, timedelta
-from typing import Union, Optional
+from datetime import date, datetime, time
+from typing import Union, Optional, Tuple
 from itertools import groupby
 
 from readerwriterlock import rwlock
 
+from data.models.event_location import EventLocation
 from data.repositories.event import EventRepository
 from data.models.event import Event
 
@@ -46,31 +48,66 @@ class GoogleSheetEventRepository(EventRepository):
             grouped_events = groupby(self.events, key=lambda handle: handle.inner.start_date.date())
             self.events_by_date = {key: list(items) for key, items in grouped_events}
 
-            # We assume that main events have a duration of 3 hours
-            for key, events in self.events_by_date.items():
-                main_event = events[-1]
-                main_event.inner = main_event.inner.copy(end_date=main_event.inner.start_date + timedelta(hours=3))
-
     def _from_row(self, row: dict[str, str]) -> Optional[Event]:
         # The event name and start date are required
-        name = row.get('event', '').strip()
+        name = row.get('name', '').strip()
         if not name:
             return None
 
-        start_date = self.__parse_datetime(row.get('date', '').strip(), row.get('time', '').strip())
+        location = GoogleSheetEventRepository._parse_event_location(row.get('location', ''))
+        if not location:
+            return None
+
+        start_date = GoogleSheetEventRepository._parse_event_date(row.get('date', '').strip())
         if not start_date:
             return None
 
+        (name, start_time) = GoogleSheetEventRepository._parse_event_time(name)
+        if not name:
+            return None
+
+        if not start_time:
+            start_time = location.default_start_time
+
+        start_datetime = self.timezone.localize(datetime.combine(start_date, start_time))
+
         return Event(
             name=name,
-            start_date=start_date,
+            location=location,
+            start_date=start_datetime,
+            end_date=start_datetime + location.default_duration,
             host=row.get('host', '').strip(),
-            description=row.get('description', '').strip(),
         )
 
-    def __parse_datetime(self, date_string: str, time_string: str) -> Optional[datetime]:
+    @staticmethod
+    def _parse_event_location(event_location_string: str) -> Optional[EventLocation]:
         try:
-            full_string = date_string + ' ' + (time_string or '19:00')
-            return self.timezone.localize(datetime.strptime(full_string, '%Y-%m-%d %H:%M'))
+            return EventLocation(event_location_string.strip().lower())
         except ValueError:
             return None
+
+    @staticmethod
+    def _parse_event_date(date_string: str) -> Optional[datetime]:
+        try:
+            return datetime.strptime(date_string, '%Y-%m-%d')
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _parse_event_time(text: str) -> (str, Optional[time]):
+        return (
+            GoogleSheetEventRepository._try_parse_time(text, "([0-9]+:[0-9]+ *(?:am|pm)) *-? *", '%I:%M%p')
+            or GoogleSheetEventRepository._try_parse_time(text, "([0-9]+ *(?:am|pm)) *-? *", '%I%p')
+            or GoogleSheetEventRepository._try_parse_time(text, "([0-9]+:[0-9]+) *-? *", '%H:%M')
+            or (text, None)
+        )
+
+    @staticmethod
+    def _try_parse_time(text: str, pattern: str, time_format: str) -> Optional[Tuple[str, time]]:
+        regex = re.compile(pattern, re.IGNORECASE)
+        match = regex.search(text)
+        if not match:
+            return None
+
+        time_string = match.group(1).replace(' ', '').lower()
+        return regex.sub('', text), datetime.strptime(time_string, time_format).time()

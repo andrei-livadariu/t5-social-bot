@@ -5,6 +5,7 @@ from reactivex.subject import Subject
 import gspread
 
 from integrations.google.api import GoogleApi
+from integrations.google.sheet_database_events_table import GoogleSheetDatabaseEventsTable
 from integrations.google.sheet_database_table import GoogleSheetDatabaseTable
 from integrations.google.sheet_database_tasks_table import GoogleSheetDatabaseTasksTable
 
@@ -18,7 +19,7 @@ class GoogleSheetDatabase:
 
         self._spreadsheet = Subject()
         self._users = GoogleSheetDatabaseTable(self, 'Community', 'full_name')
-        self._events = GoogleSheetDatabaseTable(self, 'Events')
+        self._events = GoogleSheetDatabaseEventsTable(self, 'Events')
         self._raffle = GoogleSheetDatabaseTable(self, 'Raffle')
         self._tasks = GoogleSheetDatabaseTasksTable(self, 'Checklist')
 
@@ -29,7 +30,7 @@ class GoogleSheetDatabase:
         return self._spreadsheet
 
     @property
-    def events(self) -> GoogleSheetDatabaseTable:
+    def events(self) -> GoogleSheetDatabaseEventsTable:
         return self._events
 
     @property

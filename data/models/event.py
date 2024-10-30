@@ -2,14 +2,16 @@ from dataclasses import dataclass, replace, field
 from datetime import datetime, timedelta
 from copy import deepcopy
 
+from data.models.event_location import EventLocation
+
 
 @dataclass(frozen=True)
 class Event:
     name: str
+    location: EventLocation
     start_date: datetime
     end_date: datetime = field(default=None)
     host: str = ''
-    description: str = ''
 
     def __post_init__(self):
         if not self.end_date:

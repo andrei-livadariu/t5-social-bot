@@ -113,14 +113,18 @@ class EventsModule(BaseModule):
         if not events:
             return ""
 
-        main_event = events[-1]
-        main_text = EventsModule._main_event(main_event, now)
-        today_text = f"<b>Tonight's Event:</b>\n\n{main_text}"
+        main_events = [event for event in events if event.location.is_main]
+        secondary_events = [event for event in events if not event.location.is_main]
 
-        if len(events) > 1:
-            secondary_events = events[0:-1]
-            secondary_text = "\n".join([EventsModule._upcoming_event(e, now) for e in secondary_events])
-            today_text += f"\n\n<b>Also Happening:</b>\n\n{secondary_text}"
+        today_text = f"<b>Today at T5:</b>\n\n"
+
+        if main_events:
+            today_text += "\n\n".join([EventsModule._main_event(e, now) for e in main_events])
+
+        if secondary_events:
+            if main_events:
+                today_text += f"\n\n<b>Also Happening:</b>\n\n"
+            today_text += "\n".join([EventsModule._upcoming_event(e, now) for e in secondary_events])
 
         return today_text
 
@@ -142,8 +146,7 @@ class EventsModule(BaseModule):
     def _main_event(e: Event, now: datetime) -> str:
         return (
             f"{e.name} @ {EventsModule._event_time(e.start_date, now)}"
-            + (f"\nHosted by {e.host}" if e.host else "")
-            + (f"\n{e.description}" if e.description else "")
+            + (f"\nHosted {e.location.value} by {e.host}" if e.host else f"Taking place {e.location.value}")
         )
 
     @staticmethod
