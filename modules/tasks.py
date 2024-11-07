@@ -1,6 +1,6 @@
 import logging
 import pytz
-from datetime import datetime, time
+from datetime import datetime, date, time
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.constants import ParseMode
@@ -77,7 +77,12 @@ class TasksModule(BaseModule):
             if len(list_id_tokens) < 4:
                 raise UserFriendlyError("There was an error and I could not find the task you selected. Please try again.")
 
-            task_list = self.tasks.get_task_list(datetime.now(self.timezone).date(), list_id_tokens[3])
+            list_date = date(
+                year=int(list_id_tokens[0]),
+                month=int(list_id_tokens[1]),
+                day=int(list_id_tokens[2]),
+            )
+            task_list = self.tasks.get_task_list(list_date, list_id_tokens[3])
             task_list[task_id] = self.tasks.toggle(task_list[task_id])
 
             await update.callback_query.answer()
