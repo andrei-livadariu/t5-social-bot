@@ -146,7 +146,7 @@ class EventsModule(BaseModule):
     def _main_event(e: Event, now: datetime) -> str:
         return (
             f"{e.name} @ {EventsModule._event_time(e.start_date, now)}"
-            + (f"\nHosted {e.location.value} by {e.host}" if e.host else f"Taking place {e.location.value}")
+            + (f"\nHosted {e.location.value} by {e.host}" if e.host else f"\nTaking place {e.location.value}")
         )
 
     @staticmethod
