@@ -19,7 +19,7 @@ class GoogleSheetDatabase:
 
         self._spreadsheet = Subject()
         self._users = GoogleSheetDatabaseTable(self, 'Community', 'full_name')
-        self._events = GoogleSheetDatabaseEventsTable(self, 'Events @Mon')
+        self._events = GoogleSheetDatabaseEventsTable(self, 'Events')
         self._raffle = GoogleSheetDatabaseTable(self, 'Raffle')
         self._tasks = GoogleSheetDatabaseTasksTable(self, 'Checklist')
 

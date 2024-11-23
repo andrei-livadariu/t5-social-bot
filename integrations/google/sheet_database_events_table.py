@@ -10,7 +10,7 @@ class GoogleSheetDatabaseEventsTable(GoogleSheetDatabaseTable):
             raise ValueError("The sheet does not contain the necessary data")
 
         keys = ['weekday', 'date', 'outside_name', 'outside_host', 'inside_name', 'inside_host', 'daytime_name', 'daytime_host']
-        rows = raw[1:]
+        rows = raw[2:]
 
         merged_events = [dict(zip(keys, row)) for row in rows]
         split_events = [GoogleSheetDatabaseEventsTable._split_event_row(event_row) for event_row in merged_events]
