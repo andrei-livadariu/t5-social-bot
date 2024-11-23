@@ -28,9 +28,9 @@ class TasksModule(BaseModule):
             CallbackQueryHandler(self._toggle, pattern="^tasks/toggle/"),
         ])
 
-        application.job_queue.run_daily(self._clear_day, time(8, 40, 0, 0, self.timezone))
-        application.job_queue.run_daily(self._send_am_tasks, time(8, 50, 0, 0, self.timezone))
-        application.job_queue.run_daily(self._send_pm_tasks, time(16, 24, 0, 0, self.timezone))
+        application.job_queue.run_daily(self._clear_day, time(8, 5, 0, 0, self.timezone))
+        application.job_queue.run_daily(self._send_am_tasks, time(8, 15, 0, 0, self.timezone))
+        application.job_queue.run_daily(self._send_pm_tasks, time(16, 5, 0, 0, self.timezone))
 
         logger.info("Tasks module installed")
 
