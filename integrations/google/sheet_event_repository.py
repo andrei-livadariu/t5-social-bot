@@ -96,9 +96,10 @@ class GoogleSheetEventRepository(EventRepository):
     @staticmethod
     def _parse_event_time(text: str) -> (str, Optional[time]):
         return (
-            GoogleSheetEventRepository._try_parse_time(text, "([0-9]+:[0-9]+ *(?:am|pm)) *-? *", '%I:%M%p')
-            or GoogleSheetEventRepository._try_parse_time(text, "([0-9]+ *(?:am|pm)) *-? *", '%I%p')
-            or GoogleSheetEventRepository._try_parse_time(text, "([0-9]+:[0-9]+) *-? *", '%H:%M')
+            GoogleSheetEventRepository._try_parse_time(text, "@? *([0-9]+:[0-9]+ *(?:am|pm)) *-? *", '%I:%M%p')
+            or GoogleSheetEventRepository._try_parse_time(text, "@? *([0-9]+\.[0-9]+ *(?:am|pm)) *-? *", '%I.%M%p')
+            or GoogleSheetEventRepository._try_parse_time(text, "@? *([0-9]+ *(?:am|pm)) *-? *", '%I%p')
+            or GoogleSheetEventRepository._try_parse_time(text, "@? *([0-9]+:[0-9]+) *-? *", '%H:%M')
             or (text, None)
         )
 
