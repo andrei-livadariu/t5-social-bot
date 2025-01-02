@@ -4,7 +4,7 @@ from datetime import datetime, date, time
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.constants import ParseMode
-from telegram.ext import Application, ContextTypes, CallbackQueryHandler
+from telegram.ext import Application, ContextTypes, CallbackQueryHandler, CommandHandler, filters
 
 from data.repositories.task import TaskRepository
 
@@ -24,7 +24,13 @@ class TasksModule(BaseModule):
         self.timezone = timezone
 
     def install(self, application: Application) -> None:
+        chat_ids = [target.chat_id for target in self.tasks_chats]
+
         application.add_handlers([
+            # Allow these commands to be issued only from the management chats (ignore the topic ids for now)
+            CommandHandler('clear_tasks', self._clear_tasks, filters.Chat(chat_ids)),
+            CommandHandler('repost_am_tasks', self._repost_am_tasks, filters.Chat(chat_ids)),
+            CommandHandler('repost_pm_tasks', self._repost_pm_tasks, filters.Chat(chat_ids)),
             CallbackQueryHandler(self._toggle, pattern="^tasks/toggle/"),
         ])
 
@@ -34,13 +40,22 @@ class TasksModule(BaseModule):
 
         logger.info("Tasks module installed")
 
+    async def _clear_tasks(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        await self._clear_day(context)
+
+    async def _repost_am_tasks(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        await self._send_am_tasks(context)
+
+    async def _repost_pm_tasks(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        await self._send_pm_tasks(context)
+
     async def _clear_day(self, context: ContextTypes.DEFAULT_TYPE):
         self.tasks.clear(datetime.now(self.timezone).date())
 
-    async def _send_am_tasks(self, context: ContextTypes.DEFAULT_TYPE):
+    async def _send_am_tasks(self, context: ContextTypes.DEFAULT_TYPE) -> None:
         await self._send_tasks(context, 'am')
 
-    async def _send_pm_tasks(self, context: ContextTypes.DEFAULT_TYPE):
+    async def _send_pm_tasks(self, context: ContextTypes.DEFAULT_TYPE) -> None:
         await self._send_tasks(context, 'pm')
 
     async def _send_tasks(self, context: ContextTypes.DEFAULT_TYPE, ampm: str) -> None:
