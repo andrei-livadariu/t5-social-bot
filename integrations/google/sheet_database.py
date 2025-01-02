@@ -5,9 +5,6 @@ from reactivex.subject import Subject
 import gspread
 
 from integrations.google.api import GoogleApi
-from integrations.google.sheet_database_events_table import GoogleSheetDatabaseEventsTable
-from integrations.google.sheet_database_table import GoogleSheetDatabaseTable
-from integrations.google.sheet_database_tasks_table import GoogleSheetDatabaseTasksTable
 
 logger = logging.getLogger(__name__)
 
@@ -18,32 +15,10 @@ class GoogleSheetDatabase:
         self.spreadsheet_key = spreadsheet_key
 
         self._spreadsheet = Subject()
-        self._users = GoogleSheetDatabaseTable(self, 'Community', 'full_name')
-        self._events = GoogleSheetDatabaseEventsTable(self, 'Events')
-        self._raffle = GoogleSheetDatabaseTable(self, 'Raffle')
-        self._tasks = GoogleSheetDatabaseTasksTable(self, 'Checklist')
-
-        self.refresh()
 
     @property
     def spreadsheet(self) -> Observable:
         return self._spreadsheet
-
-    @property
-    def events(self) -> GoogleSheetDatabaseEventsTable:
-        return self._events
-
-    @property
-    def users(self) -> GoogleSheetDatabaseTable:
-        return self._users
-
-    @property
-    def tasks(self) -> GoogleSheetDatabaseTasksTable:
-        return self._tasks
-
-    @property
-    def raffle(self) -> GoogleSheetDatabaseTable:
-        return self._raffle
 
     def refresh(self) -> None:
         logger.info('Refreshing Google Sheets data')

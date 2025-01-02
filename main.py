@@ -13,7 +13,8 @@ from helpers.raffle import Raffle
 from helpers.chat_target import ChatTarget
 
 from integrations.loyverse.api import LoyverseApi
-from integrations.google.sheet_database import GoogleSheetDatabase
+from integrations.google.community_database import CommunityDatabase
+from integrations.google.management_database import ManagementDatabase
 from integrations.google.sheet_event_repository import GoogleSheetEventRepository
 from integrations.google.sheet_user_repository import GoogleSheetUserRepository
 from integrations.google.sheet_task_repository import GoogleSheetTaskRepository
@@ -50,7 +51,8 @@ class MainConfig:
         self.masters = set([username for username in os.getenv('masters', '').split(',') if username])
         self.point_masters = set([username for username in os.getenv('point_masters', '').split(',') if username])
         self.google_api_credentials = os.getenv('google_api_credentials')
-        self.google_spreadsheet_key = os.getenv('google_spreadsheet_key')
+        self.community_google_spreadsheet_key = os.getenv('community_google_spreadsheet_key')
+        self.management_google_spreadsheet_key = os.getenv('management_google_spreadsheet_key')
         self.xmas_loyverse_id = os.getenv('xmas_loyverse_id')
         self.visits_to_points = {int(visits): Points(points) for visits, points in json.loads(os.getenv('visits_to_points') or '{}').items()}
 
@@ -59,15 +61,21 @@ def main() -> None:
     config = MainConfig()
     logging.basicConfig(level=config.log_level, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
-    database = GoogleSheetDatabase(
-        spreadsheet_key=config.google_spreadsheet_key,
+    community_database = CommunityDatabase(
+        spreadsheet_key=config.community_google_spreadsheet_key,
         api_credentials=config.google_api_credentials,
     )
 
-    event_repository = GoogleSheetEventRepository(database.events, config.timezone)
-    user_repository = GoogleSheetUserRepository(database.users, config.timezone)
-    task_repository = GoogleSheetTaskRepository(database.tasks, config.timezone)
-    raffle_repository = GoogleSheetRaffleRepository(database.raffle, config.timezone)
+    event_repository = GoogleSheetEventRepository(community_database.events, config.timezone)
+    user_repository = GoogleSheetUserRepository(community_database.users, config.timezone)
+    raffle_repository = GoogleSheetRaffleRepository(community_database.raffle, config.timezone)
+
+    management_database = ManagementDatabase(
+        spreadsheet_key=config.management_google_spreadsheet_key,
+        api_credentials=config.google_api_credentials,
+    )
+
+    task_repository = GoogleSheetTaskRepository(management_database.tasks, config.timezone)
 
     loy = LoyverseApi(config.loyverse_token, users=user_repository, read_only=config.loyverse_read_only)
     ac = AccessChecker(
@@ -115,7 +123,8 @@ def main() -> None:
     for module in modules:
         module.install(application)
 
-    application.job_queue.run_repeating(callback=database.refresh_job, interval=60 * 5)  # Refresh every 5 minutes
+    application.job_queue.run_repeating(callback=community_database.refresh_job, interval=60 * 5)  # Refresh every 5 minutes
+    application.job_queue.run_repeating(callback=management_database.refresh_job, interval=60 * 5)  # Refresh every 5 minutes
 
     # Start the Bot
     logger.info('start_polling')
