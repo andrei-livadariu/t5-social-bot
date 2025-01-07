@@ -7,7 +7,7 @@ class ManagementDatabase(GoogleSheetDatabase):
     def __init__(self, spreadsheet_key: str, api_credentials: str = None, api: GoogleApi = None):
         super().__init__(spreadsheet_key, api_credentials, api)
 
-        self._tasks = GoogleSheetDatabaseTasksTable(self, 'CHECKLIST')
+        self._tasks = GoogleSheetDatabaseTasksTable(self, 'Shift Checklist')
 
         self.refresh()
 
