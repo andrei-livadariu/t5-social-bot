@@ -1,6 +1,5 @@
 import pytz
 
-from typing import Optional
 from itertools import groupby
 from datetime import time, date
 
@@ -9,14 +8,14 @@ from readerwriterlock import rwlock
 from data.repositories.task import TaskRepository
 from data.models.task import Task
 
-from integrations.google.handle import Handle
-from integrations.google.sheet_database_tasks_table import GoogleSheetDatabaseTasksTable
+from integrations.google.sheets.contracts.handle import Handle
+from integrations.google.sheets.tables.tasks import TasksTable
 
 TaskHandle = Handle[Task]
 
 
-class GoogleSheetTaskRepository(TaskRepository):
-    def __init__(self, table: GoogleSheetDatabaseTasksTable, timezone: pytz.timezone = None):
+class SheetTaskRepository(TaskRepository):
+    def __init__(self, table: TasksTable, timezone: pytz.timezone = None):
         self.timezone = timezone
 
         self.tasks: list[TaskHandle] = []
@@ -55,7 +54,7 @@ class GoogleSheetTaskRepository(TaskRepository):
             if existing:
                 existing.inner = new_task
 
-            self._table.toggle(self._to_row(new_task))
+            self._table.toggle(new_task)
 
         return new_task
 
@@ -68,43 +67,9 @@ class GoogleSheetTaskRepository(TaskRepository):
             self._table.clear(target.weekday())
 
 
-    def _load(self, raw_data: list[dict[str, str]]) -> None:
+    def _load(self, raw_tasks: list[Task]) -> None:
         with self.lock.gen_wlock():
-            raw_tasks = [self._from_row(row) for row in raw_data]
-            self.tasks = [TaskHandle(task) for task in raw_tasks if task]
+            self.tasks = TaskHandle.wrap_list(raw_tasks)
 
             sorted_by_weekday = sorted(self.tasks, key=lambda handle: handle.inner.weekday)
             self.tasks_by_weekday = {key: list(group) for key, group in groupby(sorted_by_weekday, key=lambda handle: handle.inner.weekday)}
-
-    def _from_row(self, row: dict[str, str]) -> Optional[Task]:
-        # The task name is required because it's used for matching
-        name = row.get('name', '').strip()
-        if not name:
-            return None
-
-        task_time = GoogleSheetTaskRepository._parse_time(row.get('time', '').strip())
-        if not task_time:
-            return None
-
-        return Task(
-            weekday=int(row['weekday']),
-            time=task_time,
-            name=name,
-            is_done=row.get('is_done', '') != ''
-        )
-
-    @staticmethod
-    def _to_row(task: Task) -> dict[str, str]:
-        return {
-            'weekday': str(task.weekday),
-            'time': task.time.strftime('%H:%M'),
-            'name': task.name,
-            'is_done': 'x' if task.is_done else ''
-        }
-
-    @staticmethod
-    def _parse_time(time_string: str) -> Optional[time]:
-        try:
-            return time.fromisoformat(time_string)
-        except ValueError:
-            return None

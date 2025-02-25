@@ -11,14 +11,15 @@ from helpers.visit_calculator import VisitCalculator
 from helpers.points import Points
 from helpers.raffle import Raffle
 from helpers.chat_target import ChatTarget
+from integrations.google.api import GoogleApi
 
 from integrations.loyverse.api import LoyverseApi
-from integrations.google.community_database import CommunityDatabase
-from integrations.google.management_database import ManagementDatabase
-from integrations.google.sheet_event_repository import GoogleSheetEventRepository
-from integrations.google.sheet_user_repository import GoogleSheetUserRepository
-from integrations.google.sheet_task_repository import GoogleSheetTaskRepository
-from integrations.google.sheet_raffle_repository import GoogleSheetRaffleRepository
+from integrations.google.sheets.databases.community_database import CommunityDatabase
+from integrations.google.sheets.databases.management_database import ManagementDatabase
+from integrations.google.sheets.repositories.sheet_event_repository import SheetEventRepository
+from integrations.google.sheets.repositories.sheet_user_repository import SheetUserRepository
+from integrations.google.sheets.repositories.sheet_task_repository import SheetTaskRepository
+from integrations.google.sheets.repositories.sheet_raffle_repository import SheetRaffleRepository
 
 from modules.help import HelpModule
 from modules.points import PointsModule
@@ -61,21 +62,25 @@ def main() -> None:
     config = MainConfig()
     logging.basicConfig(level=config.log_level, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
+    google_api = GoogleApi(config.google_api_credentials)
+
     community_database = CommunityDatabase(
+        api=google_api,
         spreadsheet_key=config.community_google_spreadsheet_key,
-        api_credentials=config.google_api_credentials,
+        timezone=config.timezone,
     )
 
-    event_repository = GoogleSheetEventRepository(community_database.events, config.timezone)
-    user_repository = GoogleSheetUserRepository(community_database.users, config.timezone)
-    raffle_repository = GoogleSheetRaffleRepository(community_database.raffle, config.timezone)
+    event_repository = SheetEventRepository(community_database.events)
+    user_repository = SheetUserRepository(community_database.users)
+    raffle_repository = SheetRaffleRepository(community_database.raffle, config.timezone)
 
     management_database = ManagementDatabase(
+        api=google_api,
         spreadsheet_key=config.management_google_spreadsheet_key,
-        api_credentials=config.google_api_credentials,
+        timezone=config.timezone,
     )
 
-    task_repository = GoogleSheetTaskRepository(management_database.tasks, config.timezone)
+    task_repository = SheetTaskRepository(management_database.tasks, config.timezone)
 
     loy = LoyverseApi(config.loyverse_token, users=user_repository, read_only=config.loyverse_read_only)
     ac = AccessChecker(
@@ -87,7 +92,7 @@ def main() -> None:
         checkpoints=config.visits_to_points
     )
 
-    raffle = Raffle(loy, entries=raffle_repository, title="Euro 2024 Sweepstakes", ticket_price=Points(5), max_tickets=3, is_active=False)
+    raffle = Raffle(loy, entries=raffle_repository, title="Euro 2024 Sweepstakes", ticket_price=Points(5), max_tickets=3, is_active=True)
 
     modules = [
         PointsModule(loy=loy, users=user_repository, timezone=config.timezone),
