@@ -7,9 +7,5 @@ from data.models.event import Event
 
 class EventRepository(ABC):
     @abstractmethod
-    def get_all_events(self) -> List[Event]:
-        pass
-
-    @abstractmethod
     def get_events_on(self, on_date: Union[date, datetime]) -> List[Event]:
         pass

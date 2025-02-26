@@ -26,7 +26,7 @@ class Raffle:
         self.loy.remove_points(user, self.ticket_price)
         self.entries.create(user)
 
-    def get_entries(self, user: User) -> list[RaffleEntry]:
+    def get_entries(self, user: User) -> set[RaffleEntry]:
         return self.entries.get_by_user(user)
 
     def has_entries(self, user: User) -> bool:

@@ -14,7 +14,7 @@ class UserRepository:
     def get_by_telegram_name(self, telegram_name: str) -> Optional[User]:
         pass
 
-    def get_by_birthday(self, birthday: Union[str, date, datetime]) -> list[User]:
+    def get_by_birthday(self, birthday: Union[str, date, datetime]) -> set[User]:
         pass
 
     def get_by_loyverse_id(self, loyverse_id: str) -> Optional[User]:

@@ -67,11 +67,11 @@ class BirthdayModule(BaseModule):
         self._add_points(users)
         await self._announce_birthdays(users, context)
 
-    def _add_points(self, users: list[User]) -> None:
+    def _add_points(self, users: set[User]) -> None:
         for user in users:
             self.loy.add_points(user, self.points_to_award)
 
-    async def _announce_birthdays(self, users: list[User], context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def _announce_birthdays(self, users: set[User], context: ContextTypes.DEFAULT_TYPE) -> None:
         if not self.announcement_chats:
             logger.warning('There are no chats to announce the birthdays to.')
             return
@@ -120,12 +120,12 @@ class BirthdayModule(BaseModule):
         for target in self.admin_chats:
             await context.bot.send_message(target.chat_id, announcement, parse_mode=ParseMode.HTML, message_thread_id=target.thread_id)
 
-    def _get_birthdays_in_range(self, start: date, span: range) -> dict[date, list[User]]:
+    def _get_birthdays_in_range(self, start: date, span: range) -> dict[date, set[User]]:
         birthdays = {day: self.users.get_by_birthday(day) for day in (start + timedelta(days=n) for n in span)}
         return {day: users for day, users in birthdays.items() if users}
 
     @staticmethod
-    def _format_birthday_list(heading: str, birthdays: dict[date, list[User]]) -> str:
+    def _format_birthday_list(heading: str, birthdays: dict[date, set[User]]) -> str:
         message_parts = [f"<b>{heading}:</b>"]
         for day, users in birthdays.items():
             users_text = BirthdayModule._enumerate([user.friendly_name for user in users])

@@ -1,14 +1,35 @@
 import re
-from datetime import datetime, time
+from datetime import datetime, date, time
 from itertools import zip_longest
-from typing import Optional, Tuple
+from typing import Optional, Tuple, TYPE_CHECKING, Union
 
 from data.models.event import Event
 from data.models.event_location import EventLocation
+from data.repositories.event import EventRepository
 from integrations.google.sheets.contracts.tables.readable_table import ReadableTable
+from integrations.google.sheets.indexes.sorted_bucket_index import SortedBucketIndex
+
+if TYPE_CHECKING:
+    from integrations.google.sheets.contracts.database import Database
 
 
-class EventsTable(ReadableTable[Event]):
+class EventsTable(
+    ReadableTable[Event],
+    EventRepository,
+):
+    def __init__(self, database: 'Database', sheet_name: str):
+        super().__init__(database, sheet_name)
+
+        self._by_date = SortedBucketIndex(
+            key=lambda event: event.start_date.date(),
+            sorter=lambda event: event.start_date,
+            shared_lock=self._lock,
+        )
+
+    def get_events_on(self, on_date: Union[date, datetime]) -> list[Event]:
+        real_date = on_date if type(on_date) is date else on_date.date()
+        return self._by_date.get(real_date)
+
     def _parse(self, raw: list[list[str]]) -> list[Event]:
         if len(raw) < 2:
             raise ValueError("The sheet does not contain the necessary data")

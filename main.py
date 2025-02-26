@@ -16,10 +16,6 @@ from integrations.google.api import GoogleApi
 from integrations.loyverse.api import LoyverseApi
 from integrations.google.sheets.databases.community_database import CommunityDatabase
 from integrations.google.sheets.databases.management_database import ManagementDatabase
-from integrations.google.sheets.repositories.sheet_event_repository import SheetEventRepository
-from integrations.google.sheets.repositories.sheet_user_repository import SheetUserRepository
-from integrations.google.sheets.repositories.sheet_task_repository import SheetTaskRepository
-from integrations.google.sheets.repositories.sheet_raffle_repository import SheetRaffleRepository
 
 from modules.help import HelpModule
 from modules.points import PointsModule
@@ -64,25 +60,19 @@ def main() -> None:
 
     google_api = GoogleApi(config.google_api_credentials)
 
-    community_database = CommunityDatabase(
+    community = CommunityDatabase(
         api=google_api,
         spreadsheet_key=config.community_google_spreadsheet_key,
         timezone=config.timezone,
     )
 
-    event_repository = SheetEventRepository(community_database.events)
-    user_repository = SheetUserRepository(community_database.users)
-    raffle_repository = SheetRaffleRepository(community_database.raffle, config.timezone)
-
-    management_database = ManagementDatabase(
+    management = ManagementDatabase(
         api=google_api,
         spreadsheet_key=config.management_google_spreadsheet_key,
         timezone=config.timezone,
     )
 
-    task_repository = SheetTaskRepository(management_database.tasks, config.timezone)
-
-    loy = LoyverseApi(config.loyverse_token, users=user_repository, read_only=config.loyverse_read_only)
+    loy = LoyverseApi(config.loyverse_token, users=community.users, read_only=config.loyverse_read_only)
     ac = AccessChecker(
         masters=config.masters,
         point_masters=config.point_masters,
@@ -92,32 +82,32 @@ def main() -> None:
         checkpoints=config.visits_to_points
     )
 
-    raffle = Raffle(loy, entries=raffle_repository, title="Euro 2024 Sweepstakes", ticket_price=Points(5), max_tickets=3, is_active=True)
+    raffle = Raffle(loy, entries=community.raffle_entries, title="Euro 2024 Sweepstakes", ticket_price=Points(5), max_tickets=3, is_active=False)
 
     modules = [
-        PointsModule(loy=loy, users=user_repository, timezone=config.timezone),
-        DonateModule(loy=loy, ac=ac, users=user_repository, announcement_chats=config.announcement_chats),
-        VisitsModule(loy=loy, users=user_repository, vc=vc, timezone=config.timezone),
-        RaffleModule(raffle=raffle, users=user_repository),
+        PointsModule(loy=loy, users=community.users, timezone=config.timezone),
+        DonateModule(loy=loy, ac=ac, users=community.users, announcement_chats=config.announcement_chats),
+        VisitsModule(loy=loy, users=community.users, vc=vc, timezone=config.timezone),
+        RaffleModule(raffle=raffle, users=community.users),
         BirthdayModule(
             loy=loy,
             ac=ac,
-            users=user_repository,
+            users=community.users,
             announcement_chats=config.announcement_chats,
             admin_chats=config.admin_chats,
             points_to_award=config.birthday_points,
             timezone=config.timezone,
         ),
         EventsModule(
-            repository=event_repository,
+            repository=community.events,
             timezone=config.timezone,
             ac=ac,
             announcement_chats=config.announcement_chats,
             admin_chats=config.admin_chats,
         ),
-        TasksModule(tasks=task_repository, tasks_chats=config.tasks_chats, timezone=config.timezone),
+        TasksModule(tasks=management.tasks, tasks_chats=config.tasks_chats, timezone=config.timezone),
         AnnouncementsModule(team_schedule_chats=config.team_schedule_chats, timezone=config.timezone),
-        TrackingModule(users=user_repository, timezone=config.timezone),
+        TrackingModule(users=community.users, timezone=config.timezone),
     ]
 
     # The help module must be last because it catches all chat, and it picks up menu buttons from the other modules
@@ -128,8 +118,8 @@ def main() -> None:
     for module in modules:
         module.install(application)
 
-    application.job_queue.run_repeating(callback=community_database.refresh_job, interval=60 * 5)  # Refresh every 5 minutes
-    application.job_queue.run_repeating(callback=management_database.refresh_job, interval=60 * 5)  # Refresh every 5 minutes
+    application.job_queue.run_repeating(callback=community.refresh_job, interval=60 * 5)  # Refresh every 5 minutes
+    application.job_queue.run_repeating(callback=management.refresh_job, interval=60 * 5)  # Refresh every 5 minutes
 
     # Start the Bot
     logger.info('start_polling')

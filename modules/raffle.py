@@ -199,7 +199,7 @@ class RaffleModule(BaseModule):
 
         return InlineKeyboardMarkup(buttons)
 
-    def format_entries(self, entries: list[RaffleEntry]) -> str:
+    def format_entries(self, entries: set[RaffleEntry]) -> str:
         return self._enumerate([entry.country for entry in entries])
 
     @staticmethod

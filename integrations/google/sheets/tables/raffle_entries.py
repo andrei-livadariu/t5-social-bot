@@ -1,14 +1,69 @@
-from typing import Optional
+import random
+from datetime import datetime
+from typing import Optional, TYPE_CHECKING
 
 from data.models.raffle_entry import RaffleEntry
+from data.models.user import User
+from data.repositories.raffle import RaffleRepository
 from integrations.google.sheets.contracts.tables.col_row_table import ColRowTable
 from integrations.google.sheets.contracts.tables.insertable_table import InsertableTable
+from integrations.google.sheets.indexes.bucket_index import BucketIndex
 
+if TYPE_CHECKING:
+    from integrations.google.sheets.contracts.database import Database
+
+countries = [
+    'Albania',
+    'Austria',
+    'Belgium',
+    'Croatia',
+    'Czech Republic',
+    'Denmark',
+    'England',
+    'France',
+    'Georgia',
+    'Germany',
+    'Hungary',
+    'Italy',
+    'Netherlands',
+    'Poland',
+    'Portugal',
+    'Romania',
+    'Scotland',
+    'Serbia',
+    'Slovakia',
+    'Slovenia',
+    'Spain',
+    'Switzerland',
+    'Turkey',
+    'Ukraine',
+]
 
 class RaffleEntriesTable(
     ColRowTable[RaffleEntry],
     InsertableTable[RaffleEntry, dict[str, str]],
+    RaffleRepository,
 ):
+    def __init__(self, database: 'Database', sheet_name: str):
+        super().__init__(database, sheet_name)
+
+        self._by_full_name = BucketIndex(lambda entry: entry.full_name, self._lock)
+
+    def get_by_user(self, user: User) -> set[RaffleEntry]:
+        return self._by_full_name.get(user.full_name)
+
+    def list_by_user(self) -> dict[str, set[RaffleEntry]]:
+        return self._by_full_name.raw()
+
+    def create(self, user: User) -> RaffleEntry:
+        entry = RaffleEntry(
+            full_name=user.full_name,
+            created_at=datetime.now(tz=self._database.timezone),
+            country=random.choice(countries)
+        )
+        self.insert(entry)
+        return entry
+
     def _serialize(self, model: RaffleEntry) -> dict[str, str]:
         return {
             'champion_name': model.full_name,

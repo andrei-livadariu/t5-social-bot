@@ -1,13 +1,17 @@
 import logging
 from abc import ABC, abstractmethod
 from typing import TypeVar, Generic
-from reactivex import Observable, operators as op
-from reactivex.subject import BehaviorSubject
+from reactivex import operators as op
 
 import gspread
 from gspread.utils import Dimension
 
 from typing import TYPE_CHECKING
+
+from readerwriterlock.rwlock import RWLockWrite
+
+from integrations.google.sheets.contracts.index import Index
+
 if TYPE_CHECKING:
     from integrations.google.sheets.contracts.database import Database
 
@@ -24,14 +28,7 @@ class ReadableTable(ABC, Generic[T]):
         self._database = database
         self._sheet_name = sheet_name
 
-        self._data = self._attach()
-
-    @property
-    def data(self) -> Observable:
-        return self._data
-
-    def _attach(self) -> Observable:
-        cached_data = BehaviorSubject([])  # Start with an empty array until we get some data
+        self._lock = RWLockWrite()
 
         self._database.spreadsheet.pipe(  # Start with the spreadsheet
             op.map(self._load_worksheet),  # Load the sheet
@@ -39,11 +36,9 @@ class ReadableTable(ABC, Generic[T]):
             op.distinct_until_changed(),  # Only propagate when the sheet data changes, because it rarely changes
             op.map(self._parse),  # Parse the data
         ).subscribe(
-            on_next=cached_data.on_next,   # Propagate the parsed data to the cache
+            on_next=self._reset_indexes,  # Propagate the parsed data to the indexes
             on_error=logger.exception,  # Log errors
         )
-
-        return cached_data
 
     def _load_worksheet(self, spreadsheet: gspread.Spreadsheet) -> gspread.Worksheet:
         logger.info(f"Loading worksheet {self._sheet_name}")
@@ -52,6 +47,17 @@ class ReadableTable(ABC, Generic[T]):
     def _load_values(self, worksheet: gspread.Worksheet) -> list[list]:
         logger.debug(f"Loading worksheet values")
         return worksheet.get_values(major_dimension=self._dimension)
+
+    def _get_lock(self) -> RWLockWrite:
+        return self._lock
+
+    def _get_indexes(self) -> dict[str, Index]:
+        return {key: value for key, value in self.__dict__.items() if isinstance(value, Index)}
+
+    def _reset_indexes(self, models: list[T]) -> None:
+        with self._lock.gen_wlock():
+            for index in self._get_indexes().values():
+                index.reset(models)
 
     @abstractmethod
     def _parse(self, raw: list[list[str]]) -> list[T]:

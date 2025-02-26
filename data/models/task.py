@@ -6,6 +6,7 @@ from datetime import time
 @dataclass(frozen=True)
 class Task:
     weekday: int
+    id: int
     time: time
     name: str
     is_done: bool = False

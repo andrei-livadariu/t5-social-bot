@@ -13,7 +13,7 @@ class CommunityDatabase(Database):
 
         self._users = UsersTable(self, 'MEMBERS')
         self._events = EventsTable(self, 'EVENTS')
-        self._raffle = RaffleEntriesTable(self, 'Raffle')
+        self._raffle_entries = RaffleEntriesTable(self, 'Raffle')
 
         self.refresh()
 
@@ -26,5 +26,5 @@ class CommunityDatabase(Database):
         return self._events
 
     @property
-    def raffle(self) -> RaffleEntriesTable:
-        return self._raffle
+    def raffle_entries(self) -> RaffleEntriesTable:
+        return self._raffle_entries
