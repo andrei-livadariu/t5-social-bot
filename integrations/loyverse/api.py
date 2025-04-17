@@ -52,7 +52,7 @@ class LoyverseApi:
 
     def get_receipts(self, since: datetime) -> Generator[Receipt, None, None]:
         since_utc = since.replace(microsecond=0).astimezone(pytz.utc).isoformat().replace('+00:00', 'Z')
-        limit = 50
+        limit = 250
         cursor = None
 
         # Emulate do-while
