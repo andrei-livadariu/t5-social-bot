@@ -4,6 +4,8 @@ from itertools import groupby
 from typing import Optional, Tuple
 
 from data.models.user import User
+from data.models.visits_entry import VisitsEntry
+from data.repositories.visit import VisitRepository
 
 from modules.base_module import BaseModule
 from helpers.points import Points
@@ -15,16 +17,18 @@ ReachedCheckpoints = dict[date, Checkpoints]
 
 
 class VisitCalculator(BaseModule):
-    def __init__(self, checkpoints: Checkpoints):
+    def __init__(self, checkpoints: Checkpoints, visits: VisitRepository):
         # Make sure the checkpoints are sorted
         self._checkpoints = dict(sorted(checkpoints.items()))
+        self._visits = visits
 
-    @staticmethod
-    def get_visits_this_month(user: User, current_month: datetime) -> int:
-        if user.last_visit and VisitCalculator.month(user.last_visit) >= VisitCalculator.month(current_month):
-            return user.recent_visits
+    def get_last_visit(self, user: User) -> Optional[datetime]:
+        entry = self._visits.get_by_user(user)
+        return entry.last_visit
 
-        return 0
+    def get_visits_in_month(self, user: User, current_month: datetime) -> int:
+        entry = self._visits.get_by_user(user)
+        return entry.visits_by_month.get(VisitCalculator.month(current_month), 0)
 
     def get_next_checkpoint(self, visits: int) -> Optional[Tuple[int, Points]]:
         for checkpoint, points in self._checkpoints.items():
@@ -32,11 +36,9 @@ class VisitCalculator(BaseModule):
                 return checkpoint, points
         return None
 
-    def add_visits(self, raw_visits: list[Tuple[User, datetime]], current_month: datetime) -> dict[User, ReachedCheckpoints]:
+    def add_visits(self, raw_visits: list[Tuple[User, datetime]]) -> dict[User, ReachedCheckpoints]:
         if not raw_visits:
             return {}
-
-        current_month = VisitCalculator.month(current_month)
 
         # Group the visits by User
         sorted_visits = sorted(raw_visits, key=lambda visit: visit[0].full_name)
@@ -44,14 +46,19 @@ class VisitCalculator(BaseModule):
         user_visits = {user: [visit[1] for visit in visits] for user, visits in grouped_visits}
 
         # Add the visits to each user
-        raw_updates = [self._add_user_visits(user, visits, current_month) for user, visits in user_visits.items()]
-        updates = {update[0]: update[1] for update in raw_updates if update}
-        return updates
+        raw_updates = [(user, *self._add_user_visits(user, visits)) for user, visits in user_visits.items()]
 
-    def _add_user_visits(self, user: User, raw_visits: list[datetime], current_month: date) -> Optional[Tuple[User, ReachedCheckpoints]]:
-        clean_visits = VisitCalculator._clean_visits(raw_visits, user.last_visit)
+        # Save the entries to the repository
+        self._visits.save_all([entry for user, entry, checkpoints in raw_updates])
+
+        # Return the checkpoints, but not the entries
+        return {user: checkpoints for user, entry, checkpoints in raw_updates if checkpoints}
+
+    def _add_user_visits(self, user: User, raw_visits: list[datetime]) -> Tuple[VisitsEntry, ReachedCheckpoints]:
+        entry = self._visits.get_by_user(user)
+        clean_visits = VisitCalculator._clean_visits(raw_visits, entry.last_visit)
         if not clean_visits:
-            return None
+            return entry, {}
 
         # Grouping the visits by month helps us deal with various edge cases
         # 1. We have crossed from one month into another and we need to start the count again from 0 (most common)
@@ -60,25 +67,19 @@ class VisitCalculator(BaseModule):
         #    Some visits could have come in during this 24 hour interval and they would be in different months
         # 3. The bot has been shut down for a while and we are dealing with an incoming flux of historical data
         #    spanning many months, and we need to grant partial points for one month and full points for the rest
-        visits_by_month = {}
-        if user.last_visit:
-            visits_by_month[VisitCalculator.month(user.last_visit)] = user.recent_visits
+        visits_by_month = VisitCalculator._count_visits_by_month(clean_visits)
+        updated_entry = entry.add_visits(visits_by_month).copy(last_visit=clean_visits[-1])
 
         month_checkpoints = {}
-        for month, visits in VisitCalculator._count_visits_by_month(clean_visits).items():
-            old_count = visits_by_month.get(month, 0)
-            new_count = old_count + visits
-            visits_by_month[month] = new_count
-            checkpoints = self._reach_checkpoints(old_count, new_count)
+        for month in visits_by_month.keys():
+            checkpoints = self._reach_checkpoints(
+                entry.visits_by_month.get(month, 0),
+                updated_entry.visits_by_month.get(month, 0)
+            )
             if checkpoints:
                 month_checkpoints[month] = checkpoints
 
-        updated_user = user.copy(
-            recent_visits=visits_by_month.get(current_month, 0),
-            last_visit=clean_visits[-1],
-        )
-
-        return updated_user, month_checkpoints
+        return updated_entry, month_checkpoints
 
     @staticmethod
     def _clean_visits(visits: list[datetime], last_visit: Optional[datetime]) -> list[datetime]:

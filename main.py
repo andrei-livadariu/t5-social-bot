@@ -12,6 +12,7 @@ from helpers.points import Points
 from helpers.raffle import Raffle
 from helpers.chat_target import ChatTarget
 from integrations.google.api import GoogleApi
+from integrations.google.sheets.databases.visits_database import VisitsDatabase
 
 from integrations.loyverse.api import LoyverseApi
 from integrations.google.sheets.databases.community_database import CommunityDatabase
@@ -50,6 +51,7 @@ class MainConfig:
         self.google_api_credentials = os.getenv('google_api_credentials')
         self.community_google_spreadsheet_key = os.getenv('community_google_spreadsheet_key')
         self.management_google_spreadsheet_key = os.getenv('management_google_spreadsheet_key')
+        self.visits_google_spreadsheet_key = os.getenv('visits_google_spreadsheet_key')
         self.xmas_loyverse_id = os.getenv('xmas_loyverse_id')
         self.visits_to_points = {int(visits): Points(points) for visits, points in json.loads(os.getenv('visits_to_points') or '{}').items()}
 
@@ -72,6 +74,12 @@ def main() -> None:
         timezone=config.timezone,
     )
 
+    visits = VisitsDatabase(
+        api=google_api,
+        spreadsheet_key=config.visits_google_spreadsheet_key,
+        timezone=config.timezone
+    )
+
     loy = LoyverseApi(config.loyverse_token, users=community.users, read_only=config.loyverse_read_only)
     ac = AccessChecker(
         masters=config.masters,
@@ -79,7 +87,8 @@ def main() -> None:
     )
 
     vc = VisitCalculator(
-        checkpoints=config.visits_to_points
+        checkpoints=config.visits_to_points,
+        visits=visits.visits,
     )
 
     raffle = Raffle(loy, entries=community.raffle_entries, title="Euro 2024 Sweepstakes", ticket_price=Points(5), max_tickets=3, is_active=False)
@@ -120,6 +129,7 @@ def main() -> None:
 
     application.job_queue.run_repeating(callback=community.refresh_job, interval=60 * 5)  # Refresh every 5 minutes
     application.job_queue.run_repeating(callback=management.refresh_job, interval=60 * 5)  # Refresh every 5 minutes
+    application.job_queue.run_repeating(callback=visits.refresh_job, interval=60 * 5)  # Refresh every 5 minutes
 
     # Start the Bot
     logger.info('start_polling')

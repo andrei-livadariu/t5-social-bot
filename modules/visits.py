@@ -8,7 +8,6 @@ from telegram.constants import ChatType
 from telegram.ext import Application, ContextTypes, CommandHandler, CallbackQueryHandler
 
 from data.models.user import User
-from data.models.user_role import UserRole
 from data.repositories.user import UserRepository
 
 from modules.base_module import BaseModule
@@ -55,22 +54,23 @@ class VisitsModule(BaseModule):
             user = self._validate_user(update)
 
             right_now = datetime.now(self.timezone)
-            visits_this_month = VisitCalculator.get_visits_this_month(user, right_now)
+            last_visit = self.vc.get_last_visit(user)
+            visits_this_month = self.vc.get_visits_in_month(user, right_now)
 
             reply_parts = []
             if visits_this_month:
-                reply_parts.append(f"You visited T5 {user.recent_visits} times this month!")
+                reply_parts.append(f"You visited T5 {visits_this_month} times this month!")
             else:
                 reply_parts.append(f"I haven't seen you at T5 at all this month! Or maybe you're there right now for the first time?")
 
-            if user.last_visit:
-                if user.last_visit < right_now - timedelta(days=365):
+            if last_visit:
+                if last_visit < right_now - timedelta(days=365):
                     date_format = '%d %B %Y'
-                elif user.last_visit < right_now - timedelta(days=7):
+                elif last_visit < right_now - timedelta(days=7):
                     date_format = '%d %B'
                 else:
                     date_format = '%A, %d %B'
-                reply_parts.append(f"The last time I saw you there was on {user.last_visit.strftime(date_format)}.")
+                reply_parts.append(f"The last time I saw you there was on {last_visit.strftime(date_format)}.")
 
             if VisitsModule._can_earn_points(user):
                 next_checkpoint = self.vc.get_next_checkpoint(visits_this_month)
@@ -102,11 +102,10 @@ class VisitsModule(BaseModule):
         right_now = datetime.now(self.timezone)
 
         # Load fresh visits that came in since the last time we checked
-        raw_visits = self._load_visits(self.last_check)
-        updates = self.vc.add_visits(raw_visits, right_now)
+        visits = self._load_visits(self.last_check)
 
-        # Save the resulting user data to the repository
-        self.users.save_all(list(updates.keys()))
+        # Add the visits to the users
+        updates = self.vc.add_visits(visits)
 
         # Send messages to users about the points they received
         await self._send_messages(updates, right_now, context)

@@ -16,8 +16,6 @@ class User:
     telegram_id: Optional[int] = None
     loyverse_id: Optional[str] = None
     last_private_chat: Optional[datetime] = None
-    last_visit: Optional[datetime] = None
-    recent_visits: int = 0
 
     @property
     def first_name(self) -> str:

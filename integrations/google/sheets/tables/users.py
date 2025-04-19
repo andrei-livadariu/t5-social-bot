@@ -73,8 +73,6 @@ class UsersTable(
             'telegram_id': model.telegram_id,
             'loyverse_id': model.loyverse_id,
             'last_private_chat': self._database.to_datetime_string(model.last_private_chat),
-            'last_visit': self._database.to_datetime_string(model.last_visit),
-            'recent_visits': model.recent_visits,
         }
 
     def _deserialize(self, row: dict[str, str]) -> Optional[User]:
@@ -92,8 +90,6 @@ class UsersTable(
             telegram_id=UsersTable._parse_int(row.get('telegram_id', '')),
             loyverse_id=row.get('loyverse_id', '').strip(),
             last_private_chat=self._database.from_datetime_string(row.get('last_private_chat', '')),
-            last_visit=self._database.from_datetime_string(row.get('last_visit', '')),
-            recent_visits=UsersTable._parse_int(row.get('recent_visits', '')) or 0,
         )
 
     @staticmethod
