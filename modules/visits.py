@@ -1,7 +1,6 @@
 import logging
 import pytz
 from datetime import datetime, timedelta
-from typing import Optional, Tuple
 
 from telegram import Update, InlineKeyboardButton
 from telegram.constants import ChatType
@@ -16,7 +15,6 @@ from helpers.visit_calculator import VisitCalculator, ReachedCheckpoints
 from helpers.exceptions import UserFriendlyError
 
 from integrations.loyverse.api import LoyverseApi
-from integrations.loyverse.receipt import Receipt
 
 from messages import visits_checkpoints
 
@@ -102,7 +100,7 @@ class VisitsModule(BaseModule):
         right_now = datetime.now(self.timezone)
 
         # Load fresh visits that came in since the last time we checked
-        visits = self._load_visits(self.last_check)
+        visits = self.loy.load_visits(self.last_check)
 
         # Add the visits to the users
         updates = self.vc.add_visits(visits)
@@ -112,22 +110,6 @@ class VisitsModule(BaseModule):
 
         # Remember when we last retrieved new information
         self.last_check = right_now
-
-    def _load_visits(self, since: datetime) -> list[Tuple[User, datetime]]:
-        # Load the receipts and convert them into visits (User + creation date)
-        receipts = self.loy.get_receipts(since)
-        raw_visits = [self._receipt_to_visit(receipt) for receipt in receipts]
-        return [visit for visit in raw_visits if visit]
-
-    def _receipt_to_visit(self, receipt: Receipt) -> Optional[Tuple[User, datetime]]:
-        if not receipt.customer_id:
-            return None
-
-        user = self.loy.get_user_by_customer_id(receipt.customer_id)
-        if not user:
-            return None
-
-        return user, receipt.created_at
 
     async def _send_messages(self, updates: dict[User, ReachedCheckpoints], right_now: datetime, context: ContextTypes.DEFAULT_TYPE):
         updates_with_points = {user: points for user, points in updates.items() if points and VisitsModule._can_earn_points(user)}

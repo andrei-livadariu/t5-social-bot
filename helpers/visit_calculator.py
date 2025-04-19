@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime, date, timedelta
 from itertools import groupby
-from typing import Optional, Tuple
+from typing import Optional
 
 from data.models.user import User
 from data.models.visits_entry import VisitsEntry
@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 Checkpoints = dict[int, Points]
 ReachedCheckpoints = dict[date, Checkpoints]
+RawVisit = tuple[User, datetime]
 
 
 class VisitCalculator(BaseModule):
@@ -30,13 +31,13 @@ class VisitCalculator(BaseModule):
         entry = self._visits.get_by_user(user)
         return entry.visits_by_month.get(VisitCalculator.month(current_month), 0)
 
-    def get_next_checkpoint(self, visits: int) -> Optional[Tuple[int, Points]]:
+    def get_next_checkpoint(self, visits: int) -> Optional[tuple[int, Points]]:
         for checkpoint, points in self._checkpoints.items():
             if checkpoint > visits:
                 return checkpoint, points
         return None
 
-    def add_visits(self, raw_visits: list[Tuple[User, datetime]]) -> dict[User, ReachedCheckpoints]:
+    def add_visits(self, raw_visits: list[RawVisit]) -> dict[User, ReachedCheckpoints]:
         if not raw_visits:
             return {}
 
@@ -54,7 +55,7 @@ class VisitCalculator(BaseModule):
         # Return the checkpoints, but not the entries
         return {user: checkpoints for user, entry, checkpoints in raw_updates if checkpoints}
 
-    def _add_user_visits(self, user: User, raw_visits: list[datetime]) -> Tuple[VisitsEntry, ReachedCheckpoints]:
+    def _add_user_visits(self, user: User, raw_visits: list[datetime]) -> tuple[VisitsEntry, ReachedCheckpoints]:
         entry = self._visits.get_by_user(user)
         clean_visits = VisitCalculator._clean_visits(raw_visits, entry.last_visit)
         if not clean_visits:

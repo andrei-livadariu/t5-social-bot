@@ -2,7 +2,7 @@ import logging
 import requests
 import json
 import pytz
-from typing import Optional, Generator, Tuple
+from typing import Optional, Generator
 from datetime import datetime
 
 import helpers.json
@@ -10,6 +10,7 @@ from helpers.points import Points
 
 from data.models.user import User
 from data.repositories.user import UserRepository
+from helpers.visit_calculator import RawVisit
 
 from integrations.loyverse.customer import Customer
 from integrations.loyverse.receipt import Receipt
@@ -50,6 +51,22 @@ class LoyverseApi:
         customer.points -= points
         self._save_customer(customer)
 
+    def load_visits(self, since: datetime) -> list[RawVisit]:
+        # Load the receipts and convert them into visits (User + creation date)
+        receipts = self.get_receipts(since)
+        raw_visits = [self._receipt_to_visit(receipt) for receipt in receipts]
+        return [visit for visit in raw_visits if visit]
+
+    def _receipt_to_visit(self, receipt: Receipt) -> Optional[RawVisit]:
+        if not receipt.customer_id:
+            return None
+
+        user = self.get_user_by_customer_id(receipt.customer_id)
+        if not user:
+            return None
+
+        return user, receipt.created_at
+
     def get_receipts(self, since: datetime) -> Generator[Receipt, None, None]:
         since_utc = since.replace(microsecond=0).astimezone(pytz.utc).isoformat().replace('+00:00', 'Z')
         limit = 250
@@ -77,7 +94,7 @@ class LoyverseApi:
             if not cursor or len(raw_receipts) < limit:
                 break
 
-    def get_all_points(self) -> Generator[Tuple[User, Points], None, None]:
+    def get_all_points(self) -> Generator[tuple[User, Points], None, None]:
         for customer in self._get_all_customers():
             user = self.get_user_by_customer_id(customer.customer_id)
             if not user:
