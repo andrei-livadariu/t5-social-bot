@@ -4,6 +4,8 @@ import gspread
 from abc import abstractmethod
 from typing import TypeVar, Optional
 
+from gspread.utils import ValueInputOption
+
 from integrations.google.sheets.contracts.tables.readable_table import ReadableTable
 
 logger = logging.getLogger(__name__)
@@ -51,7 +53,7 @@ class ColRowTable(ReadableTable[T]):
                 to_append.append(flat_values)
 
             if to_append:
-                worksheet.append_rows(to_append)
+                worksheet.append_rows(to_append, value_input_option=ValueInputOption.user_entered)
         except Exception as e:
             logger.exception(e)
 
@@ -105,7 +107,7 @@ class ColRowTable(ReadableTable[T]):
                     to_update.append(gspread.Cell(row_number + 1 + 1, k + 1, v)) # Coordinates start at 1 and we also have 1 row for the headers
 
             if to_update:
-                worksheet.update_cells(to_update)
+                worksheet.update_cells(to_update, value_input_option=ValueInputOption.user_entered)
         except Exception as e:
             logger.exception(e)
 
