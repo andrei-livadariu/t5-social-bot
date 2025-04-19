@@ -29,6 +29,12 @@ class VisitsTable(
     def get_by_user(self, user: User) -> VisitsEntry:
         return self._by_full_name.get(user.full_name) or VisitsEntry(full_name=user.full_name)
 
+    def get_visitors_in_month(self, month: date) -> list[tuple[str, int]]:
+        all_visitors = self._by_full_name.raw().values()
+        visits_in_month = [(entry.full_name, entry.visits_by_month.get(month, 0)) for entry in all_visitors]
+        visitors_in_month = [(full_name, visits) for full_name, visits in visits_in_month if visits]
+        return visitors_in_month
+
     def save(self, entry: VisitsEntry) -> None:
         self.save_all([entry])
 

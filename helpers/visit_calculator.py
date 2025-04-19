@@ -27,9 +27,12 @@ class VisitCalculator(BaseModule):
         entry = self._visits.get_by_user(user)
         return entry.last_visit
 
-    def get_visits_in_month(self, user: User, current_month: datetime) -> int:
+    def get_visits_in_month(self, user: User, month: datetime) -> int:
         entry = self._visits.get_by_user(user)
-        return entry.visits_by_month.get(VisitCalculator.month(current_month), 0)
+        return entry.visits_by_month.get(VisitCalculator.month(month), 0)
+
+    def get_visitors_in_month(self, month: datetime) -> list[tuple[str, int]]:
+        return self._visits.get_visitors_in_month(VisitCalculator.month(month))
 
     def get_next_checkpoint(self, visits: int) -> Optional[tuple[int, Points]]:
         for checkpoint, points in self._checkpoints.items():

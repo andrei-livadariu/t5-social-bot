@@ -1,13 +1,14 @@
 import logging
 import pytz
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 
 from telegram import Update, InlineKeyboardButton
-from telegram.constants import ChatType
+from telegram.constants import ChatType, ParseMode
 from telegram.ext import Application, ContextTypes, CommandHandler, CallbackQueryHandler
 
 from data.models.user import User
 from data.repositories.user import UserRepository
+from helpers.chat_target import ChatTarget
 
 from modules.base_module import BaseModule
 from helpers.points import Points
@@ -22,11 +23,12 @@ logger = logging.getLogger(__name__)
 
 
 class VisitsModule(BaseModule):
-    def __init__(self, loy: LoyverseApi, users: UserRepository, vc: VisitCalculator, timezone: pytz.timezone = None):
+    def __init__(self, loy: LoyverseApi, users: UserRepository, vc: VisitCalculator, timezone: pytz.timezone = None, admin_chats: set[ChatTarget] = None):
         self.loy = loy
         self.users = users
         self.timezone = timezone
         self.vc = vc
+        self._admin_chats = admin_chats
 
         # We start checking for visits from the first day of the current month
         self.last_check = datetime.now(self.timezone).replace(day=1, hour=0, minute=0, second=0)
@@ -39,6 +41,9 @@ class VisitsModule(BaseModule):
 
         application.job_queue.run_once(callback=self._update_visits, when=0)
         application.job_queue.run_repeating(callback=self._update_visits, interval=60 * 5)
+
+        monthly_time = time(0, 5, 0, 0, self.timezone) # Midnight plus a few minutes to leave room for other messages
+        application.job_queue.run_monthly(self._announce_top_visits, when=monthly_time, day=1)
 
         logger.info(f"Visits module installed")
 
@@ -94,6 +99,30 @@ class VisitsModule(BaseModule):
             await update.callback_query.edit_message_text(reply, disable_web_page_preview=True)
         else:
             await update.message.reply_html(reply, disable_web_page_preview=True)
+
+    async def _announce_top_visits(self, context: ContextTypes.DEFAULT_TYPE) -> None:
+        if not self._admin_chats:
+            return
+
+        last_month = datetime.now(self.timezone).replace(day=1) - timedelta(days=1)
+        raw_visitors = self.vc.get_visitors_in_month(last_month)
+        linked_visitors = [(self.users.get_by_full_name(full_name), visits) for full_name, visits in raw_visitors]
+        visitors = [(user, visits) for user, visits in linked_visitors if user]
+
+        if visitors:
+            sorted_visitors = sorted(visitors, key=lambda tup: tup[1], reverse=True)
+            top_10 = sorted_visitors[:10]
+            lines = [f"{i + 1}. {user.full_name} - {visits} visits" for i, (user, visits) in enumerate(top_10)]
+
+            announcement = "\n\n".join([
+                f"<b>Here are the top 10 visitors in the month of {last_month.strftime('%B')}:</b>",
+                "\n".join(lines),
+            ])
+        else:
+            announcement = "Unlikely as it is, no community members visited this month."
+
+        for target in self._admin_chats:
+            await context.bot.send_message(target.chat_id, announcement, parse_mode=ParseMode.HTML, message_thread_id=target.thread_id)
 
     async def _update_visits(self, context: ContextTypes.DEFAULT_TYPE) -> None:
         # This function may take several seconds to run, so it's important that we sample the time at the start

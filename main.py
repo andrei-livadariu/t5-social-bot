@@ -96,7 +96,13 @@ def main() -> None:
     modules = [
         PointsModule(loy=loy, users=community.users, timezone=config.timezone),
         DonateModule(loy=loy, ac=ac, users=community.users, announcement_chats=config.announcement_chats),
-        VisitsModule(loy=loy, users=community.users, vc=vc, timezone=config.timezone),
+        VisitsModule(
+            loy=loy,
+            users=community.users,
+            vc=vc,
+            timezone=config.timezone,
+            admin_chats=config.admin_chats,
+        ),
         RaffleModule(raffle=raffle, users=community.users),
         BirthdayModule(
             loy=loy,
