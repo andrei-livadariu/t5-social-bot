@@ -1,0 +1,9 @@
+# Direct requirements
+# Use pip-compile to produce the final requirements.txt file
+
+pytz~=2025.2
+reactivex~=4.0.4
+readerwriterlock~=1.0.9
+python-dotenv~=1.1
+python-telegram-bot[job-queue]~=22.0
+gspread~=6.1.2

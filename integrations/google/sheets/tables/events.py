@@ -122,10 +122,10 @@ class EventsTable(
     @staticmethod
     def _parse_event_time(text: str) -> (str, Optional[time]):
         return (
-            EventsTable._try_parse_time(text, "@? *([0-9]+:[0-9]+ *(?:am|pm)) *-? *", '%I:%M%p')
-            or EventsTable._try_parse_time(text, "@? *([0-9]+\.[0-9]+ *(?:am|pm)) *-? *", '%I.%M%p')
-            or EventsTable._try_parse_time(text, "@? *([0-9]+ *(?:am|pm)) *-? *", '%I%p')
-            or EventsTable._try_parse_time(text, "@? *([0-9]+:[0-9]+) *-? *", '%H:%M')
+            EventsTable._try_parse_time(text, r"@? *([0-9]+:[0-9]+ *(?:am|pm)) *-? *", '%I:%M%p')
+            or EventsTable._try_parse_time(text, r"@? *([0-9]+\.[0-9]+ *(?:am|pm)) *-? *", '%I.%M%p')
+            or EventsTable._try_parse_time(text, r"@? *([0-9]+ *(?:am|pm)) *-? *", '%I%p')
+            or EventsTable._try_parse_time(text, r"@? *([0-9]+:[0-9]+) *-? *", '%H:%M')
             or (text, None)
         )
 
