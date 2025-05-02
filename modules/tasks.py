@@ -1,21 +1,27 @@
 import logging
+
 import pytz
-from datetime import datetime, date, time
+import calendar
+from time import strptime
+from datetime import datetime, date, timedelta
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.constants import ParseMode
-from telegram.ext import Application, ContextTypes, CallbackQueryHandler, CommandHandler, filters
+from telegram.ext import Application, ContextTypes, CallbackQueryHandler, CommandHandler, filters, JobQueue
 
+from data.models.task_list import TaskList
+from data.models.task import Task
 from data.repositories.task import TaskRepository
 
-from helpers.exceptions import UserFriendlyError
+from helpers.exceptions import UserFriendlyError, CommandSyntaxError
 from helpers.chat_target import ChatTarget
 
 from modules.base_module import BaseModule
-from data.models.task import Task
 
 logger = logging.getLogger(__name__)
 
+HEADS_UP_TIME = timedelta(minutes=15)
+POST_TASKS_HELP_TEXT = "To use this command you need to write it like this:\n/post_tasks (time)\nor:\n/post_tasks (weekday) (time)\n\nFor example:\n/post_tasks am\nor:\n/post_tasks monday pm"
 
 class TasksModule(BaseModule):
     def __init__(self, tasks: TaskRepository, tasks_chats: set[ChatTarget], timezone: pytz.timezone = None):
@@ -27,55 +33,79 @@ class TasksModule(BaseModule):
         chat_ids = [target.chat_id for target in self.tasks_chats]
 
         application.add_handlers([
-            # Allow these commands to be issued only from the management chats (ignore the topic ids for now)
-            CommandHandler('clear_tasks', self._clear_tasks, filters.Chat(chat_ids)),
-            CommandHandler('repost_am_tasks', self._repost_am_tasks, filters.Chat(chat_ids)),
-            CommandHandler('repost_pm_tasks', self._repost_pm_tasks, filters.Chat(chat_ids)),
+            # Allow these commands to be issued only from the task chats (ignore the topic ids for now)
+            CommandHandler('post_tasks', self._post_tasks, filters.Chat(chat_ids)),
             CallbackQueryHandler(self._toggle, pattern="^tasks/toggle/"),
         ])
 
-        application.job_queue.run_daily(self._clear_day, time(8, 5, 0, 0, self.timezone))
-        application.job_queue.run_daily(self._send_am_tasks, time(8, 15, 0, 0, self.timezone))
-        application.job_queue.run_daily(self._send_pm_tasks, time(16, 5, 0, 0, self.timezone))
+        right_now = datetime.now(self.timezone)
+        self._schedule_next_post(application.job_queue, right_now)
 
         logger.info("Tasks module installed")
 
-    async def _clear_tasks(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        await self._clear_day(context)
+    async def _post_tasks(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        try:
+            if len(context.args) == 1:
+                weekday = datetime.now(self.timezone).weekday()
+                group = context.args[0]
+            elif len(context.args) == 2:
+                try:
+                    weekday = strptime(context.args[0], '%A').tm_wday
+                except ValueError:
+                    raise UserFriendlyError('I could not understand the weekday you are referring to. Please try again.')
 
-    async def _repost_am_tasks(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        await self._send_am_tasks(context)
+                group = context.args[1]
+            else:
+                raise CommandSyntaxError()
 
-    async def _repost_pm_tasks(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        await self._send_pm_tasks(context)
+            task_list = self.tasks.get_task_list(weekday, group)
+            if not task_list:
+                raise UserFriendlyError('I could not find any tasks for the time period you requested. Please try a different time period.')
 
-    async def _clear_day(self, context: ContextTypes.DEFAULT_TYPE):
-        self.tasks.clear(datetime.now(self.timezone).date())
+            await self._send_tasks(context, task_list)
+        except CommandSyntaxError:
+            await update.message.reply_text(POST_TASKS_HELP_TEXT)
+        except UserFriendlyError as e:
+            await update.message.reply_text(str(e))
+        except Exception as e:
+            logger.exception(e)
+            await update.message.reply_text(f"BeeDeeBeeBoop 🤖 Error : {e}")
 
-    async def _send_am_tasks(self, context: ContextTypes.DEFAULT_TYPE) -> None:
-        await self._send_tasks(context, 'am')
+    async def _send_scheduled_tasks(self, context: ContextTypes.DEFAULT_TYPE) -> None:
+        right_now = datetime.now(self.timezone)
+        task_list = self.tasks.get_next_task_list(right_now)
 
-    async def _send_pm_tasks(self, context: ContextTypes.DEFAULT_TYPE) -> None:
-        await self._send_tasks(context, 'pm')
+        task_list = self.tasks.clear(task_list)
+        await self._send_tasks(context, task_list)
 
-    async def _send_tasks(self, context: ContextTypes.DEFAULT_TYPE, ampm: str) -> None:
+        self._schedule_next_post(context.job_queue, task_list.next_run(right_now))
+
+    async def _send_tasks(self, context: ContextTypes.DEFAULT_TYPE, task_list: TaskList) -> None:
         today = datetime.now(self.timezone).date()
-        task_list = self.tasks.get_task_list(today, ampm)
-        list_id = today.strftime('%Y_%m_%d').lower() + '_' + ampm
-
-        announcement = (today.strftime('%A') + ' ' + ampm).upper()
+        list_id = today.strftime('%Y_%m_%d').lower() + '_' + task_list.group
+        announcement = (calendar.day_name[task_list.weekday] + ' ' + task_list.group).upper()
 
         for target in self.tasks_chats:
             await context.bot.send_message(
                 target.chat_id,
                 announcement,
                 message_thread_id=target.thread_id,
-                reply_markup=self._tasks_keyboard(task_list, list_id),
+                reply_markup=TasksModule._tasks_keyboard(task_list, list_id),
                 parse_mode=ParseMode.HTML
             )
 
-    def _tasks_keyboard(self, tasks: list[Task], list_id: str) -> InlineKeyboardMarkup:
-        buttons = [[InlineKeyboardButton(TasksModule._format_task(task), callback_data=f"tasks/toggle/{list_id}/{i}")] for i, task in enumerate(tasks)]
+    def _schedule_next_post(self, job_queue: JobQueue, after: datetime) -> None:
+        next_list = self.tasks.get_next_task_list(after)
+        if not next_list:
+            logger.warning("No task list found when attempting to schedule")
+            return
+
+        next_post = next_list.next_run(after) - HEADS_UP_TIME
+        job_queue.run_once(self._send_scheduled_tasks, when=next_post)
+
+    @staticmethod
+    def _tasks_keyboard(task_list: TaskList, list_id: str) -> InlineKeyboardMarkup:
+        buttons = [[InlineKeyboardButton(TasksModule._format_task(task), callback_data=f"tasks/toggle/{list_id}/{i}")] for i, task in enumerate(task_list.tasks)]
 
         return InlineKeyboardMarkup(buttons)
 
@@ -86,7 +116,7 @@ class TasksModule(BaseModule):
                 raise UserFriendlyError("There was an error and I could not understand your command. Please try again.")
 
             list_id = args[2]
-            task_id = int(args[3])
+            task_position = int(args[3])
 
             list_id_tokens = list_id.split('_')
             if len(list_id_tokens) < 4:
@@ -97,11 +127,16 @@ class TasksModule(BaseModule):
                 month=int(list_id_tokens[1]),
                 day=int(list_id_tokens[2]),
             )
-            task_list = self.tasks.get_task_list(list_date, list_id_tokens[3])
-            task_list[task_id] = self.tasks.toggle(task_list[task_id])
+            list_group = list_id_tokens[3]
 
+            task_list = self.tasks.get_task_list(list_date.weekday(), list_group)
+            task_list = self.tasks.toggle(task_list, task_position)
+
+            # For a better UX, we first update the message and then save the changes to the repository
             await update.callback_query.answer()
             await update.callback_query.edit_message_text(update.effective_message.text, reply_markup=self._tasks_keyboard(task_list, list_id), parse_mode=ParseMode.HTML)
+
+            self.tasks.save(task_list)
         except UserFriendlyError as e:
             await update.callback_query.answer()
             await update.callback_query.edit_message_text(str(e))

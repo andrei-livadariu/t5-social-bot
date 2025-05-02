@@ -1,25 +1,41 @@
 import logging
+from operator import itemgetter
+from dataclasses import dataclass
 from typing import Optional, TYPE_CHECKING
-from datetime import date, time
+from datetime import time, datetime
+from time import strptime
 
-from gspread.utils import Dimension, rowcol_to_a1
+from gspread import Cell
+from gspread.utils import Dimension, ValueInputOption
 
 from data.models.task import Task
+from data.models.task_list import TaskList
 from data.repositories.task import TaskRepository
 from integrations.google.sheets.contracts.tables.readable_table import ReadableTable
-from integrations.google.sheets.indexes.sorted_bucket_index import SortedBucketIndex
+from integrations.google.sheets.indexes.unique_index import UniqueIndex
 
 if TYPE_CHECKING:
     from integrations.google.sheets.contracts.database import Database
 
 logger = logging.getLogger(__name__)
 
-weekday_keys = {'time': 0, 'name': 1, 'is_done': 2}
-weekday_cols = len(weekday_keys)
+group_keys = {'time': 0, 'name': 1, 'is_done': 2}
+group_cols = len(group_keys)
+
+# This dataclass adds cell-related information to the Task model,
+# which means it's only relevant for this particular integration
+@dataclass(frozen=True, kw_only=True)
+class TaskEntry(Task):
+    row: int
+    col: int
+
+    @property
+    def cell(self) -> Cell:
+        return Cell(self.row, self.col, value='x' if self.is_done else '')
 
 
 class TasksTable(
-    ReadableTable[Task],
+    ReadableTable[TaskList],
     TaskRepository
 ):
     _dimension = Dimension.cols
@@ -27,124 +43,147 @@ class TasksTable(
     def __init__(self, database: 'Database', sheet_name: str):
         super().__init__(database, sheet_name)
 
-        self._by_weekday = SortedBucketIndex(
-            key=lambda task: task.weekday,
-            sorter=lambda task: task.id,
-            shared_lock=self._lock
-        )
+        self._by_id = UniqueIndex[TaskList, str](lambda entry: entry.id, self._lock)
 
-    def get_task_list(self, day: date, ampm: str) -> list[Task]:
-        weekday = day.weekday()
-        cutoff_time = time(16, 25, 0, 0)
+    def get_task_list(self, weekday: int, group: str) -> Optional[TaskList]:
+        return self._by_id.get(f"{weekday}.{group}")
 
-        task_list = self._by_weekday.get(weekday)
+    def get_next_task_list(self, after: datetime) -> Optional[TaskList]:
+        task_lists = list(self._by_id.raw().values())
+        if not task_lists:
+            return None
 
-        cutoff_point = 0
-        for i, task in enumerate(task_list):
-            if task.time >= cutoff_time:
-                cutoff_point = i
-                break
+        task_lists_by_next_run = [(task_list.next_run(after), task_list) for task_list in task_lists]
+        next_entry = min(task_lists_by_next_run, key=itemgetter(0))
+        return next_entry[1]
 
-        if ampm == 'am':
-            return task_list[:cutoff_point]
-        else:
-            return task_list[cutoff_point:]
+    def toggle(self, task_list: TaskList, position: int) -> TaskList:
+        entries = [task for task in task_list.tasks if isinstance(task, TaskEntry)]
+        if position >= len(entries):
+            raise ValueError('The given position was not found in the list')
 
-    def toggle(self, task: Task) -> Task:
+        entries[position] = self._toggle_entry(entries[position])
+
+        return task_list.copy(tasks=entries)
+
+    def save(self, task_list: TaskList) -> None:
         with self._lock.gen_wlock():
-            existing_weekday_tasks = self._by_weekday.get_for_writing(task.weekday)
-            if not task in existing_weekday_tasks:
-                raise ValueError('Unable to find the task. Only existing tasks can be toggled.')
+            existing_list = self._by_id.get_for_writing(task_list.id)
+            if not existing_list:
+                raise ValueError('Trying to save a new task list - only existing task lists can be saved')
 
-            new_task = task.copy(is_done=not task.is_done)
-            self._by_weekday.update(task, new_task)
-            self._remote_toggle(new_task)
+            changes = [(existing_list, task_list)]
 
-            return new_task
+            entries = [task for task in task_list.tasks if isinstance(task, TaskEntry)]
+            changed_cells = [task.cell for i, task in enumerate(entries) if task.is_done != existing_list.tasks[i].is_done]
 
-    def _remote_toggle(self, task: Task) -> None:
+            self._update_indexes(changes)
+            self._remote_toggle(changed_cells)
+
+    def clear(self, task_list: TaskList) -> TaskList:
+        changed_tasks = [self._toggle_entry(task, False) for task in task_list.tasks if isinstance(task, TaskEntry)]
+        new_list = task_list.copy(tasks=changed_tasks)
+        self.save(new_list)
+        return new_list
+
+    def _toggle_entry(self, entry: TaskEntry, value: Optional[bool] = None) -> TaskEntry:
+        if value is None:
+            value = not entry.is_done
+
+        return entry.copy(is_done=value)
+
+    def _update_indexes(self, changes: list[tuple[TaskList, TaskList]]) -> None:
+        for index in self._get_indexes().values():
+            index.update_all(changes)
+
+    def _remote_toggle(self, cells: list[Cell]) -> None:
+        if not cells:
+            return
+
         try:
             # Load the data from Google
             spreadsheet = self._database.load()
             worksheet = self._load_worksheet(spreadsheet)
-
-            weekday = task.weekday
-            row_number = task.id + 1
-            column_number = weekday * weekday_cols + weekday_keys['is_done'] + 1
-
-            worksheet.update_cell(row_number, column_number, 'x' if task.is_done else '')
+            worksheet.update_cells(cells, value_input_option=ValueInputOption.user_entered)
         except Exception as e:
             logger.exception(e)
 
-    def clear(self, target: date) -> None:
-        with self._lock.gen_wlock():
-            tasks = self._by_weekday.get_for_writing(target.weekday())
-            changes = [(task, task.copy(is_done=False)) for task in tasks]
-            self._by_weekday.update_all(changes)
-            self._remote_clear(target.weekday())
+    def _parse(self, raw: list[list[str]]) -> list[TaskList]:
+        # Fill any missing columns at the end with blanks
+        incomplete_days = len(raw) % group_cols
+        if incomplete_days:
+            missing_columns = group_cols - incomplete_days
+            for i in range(missing_columns):
+                raw.append([''] * len(raw[0]))
 
-    def _remote_clear(self, weekday: int) -> None:
-        try:
-            # Load the data from Google
-            spreadsheet = self._database.load()
-            worksheet = self._load_worksheet(spreadsheet)
-
-            column_number = weekday * weekday_cols + weekday_keys['is_done'] + 1
-
-            coordinate = rowcol_to_a1(1, column_number)
-            column_name = ''.join([i for i in coordinate if not i.isdigit()])
-
-            worksheet.batch_clear([f"{column_name}:{column_name}"])
-        except Exception as e:
-            logger.exception(e)
-
-    def _parse(self, raw: list[list[str]]) -> list[Task]:
-        tasks_by_weekday = [self._parse_weekday(raw, weekday) for weekday in range(0, 7)]
+        tasks_by_weekday = [self._parse_weekday(raw, start_column) for start_column in range(0, len(raw), group_cols)]
         flat = [task for weekday_tasks in tasks_by_weekday for task in weekday_tasks]
         return flat
 
-    def _parse_weekday(self, raw: list[list], weekday: int) -> list[Task]:
+    def _parse_weekday(self, raw: list[list[str]], start_column: int) -> list[TaskList]:
         # This method preserves the row numbers from the Google Sheet as they are used for updating
-        start = weekday * weekday_cols
-        end = start + weekday_cols
+        end_column = start_column + group_cols
 
-        if len(raw) <= start:
-            raise ValueError("The sheet does not contain the requested weekday")
+        raw_day = list(zip(*raw[start_column:end_column]))
+        if not raw_day:
+            raise ValueError("The requested weekday column is empty")
 
-        # Fill any missing columns at the end with blanks
-        if len(raw) < end:
-            for i in range(len(raw), end):
-                raw.append([''] * len(raw[0]))
+        header = raw_day[0]
+        weekday = strptime(header[0], '%A').tm_wday
+        rows = raw_day[1:]
 
-        raw_today = list(zip(*raw[start:end]))
-
-        tasks = []
+        task_lists = []
+        current_group = None
+        current_tasks = []
 
         last_time = None
-        for i, weekday_values in enumerate(raw_today):
-            row = dict(zip(weekday_keys.keys(), weekday_values))
+        for i, weekday_values in enumerate(rows):
+            row = dict(zip(group_keys.keys(), weekday_values))
 
             # Skip tasks with empty names; this handles the various table headers
-            name = row.get('name', '').strip()
-            if not name:
-                continue
-
-            # Fill in the missing time
+            task_name = row.get('name', '').strip()
             task_time = row.get('time', '').strip()
-            if task_time:
-                last_time = TasksTable._parse_time(task_time)
-            if not last_time:
+
+            # Completely empty task - must be an error; skip
+            if not task_time and not task_name:
                 continue
 
-            tasks.append(Task(
+            parsed_time = TasksTable._parse_time(task_time) if task_time else None
+
+            # Keep any valid time as the last time
+            if parsed_time:
+                last_time = parsed_time
+
+            if task_name: # Has a name -> regular task
+                current_tasks.append(TaskEntry(
+                    time=last_time,
+                    name=task_name,
+                    is_done=row.get('is_done', '') != '',
+                    row=i + 1 + 1,  # 1 for the skipped header and 1 because rows are 1-based
+                    col=start_column + group_keys['is_done'] + 1,  # Columns are 1-based
+                ))
+            elif task_time and not parsed_time: # Has the time, but it's not parseable -> group header
+                # Push any current tasks to a new task list
+                if current_group and current_tasks:
+                    task_lists.append(TaskList(
+                        weekday=weekday,
+                        group=current_group,
+                        tasks=current_tasks,
+                    ))
+
+                current_group = task_time.lower()
+                current_tasks = []
+            # Anything else -> skip
+
+        # Group up the remaining tasks
+        if current_group and current_tasks:
+            task_lists.append(TaskList(
                 weekday=weekday,
-                id=i,
-                time=last_time,
-                name=name,
-                is_done=row.get('is_done', '') != ''
+                group=current_group,
+                tasks=current_tasks,
             ))
 
-        return tasks
+        return task_lists
 
     @staticmethod
     def _parse_time(time_string: str) -> Optional[time]:
