@@ -7,7 +7,6 @@ from data.models.user import User
 from data.models.visits_entry import VisitsEntry
 from data.repositories.visit import VisitRepository
 
-from modules.base_module import BaseModule
 from helpers.points import Points
 
 logger = logging.getLogger(__name__)
@@ -17,7 +16,7 @@ ReachedCheckpoints = dict[date, Checkpoints]
 RawVisit = tuple[User, datetime]
 
 
-class VisitCalculator(BaseModule):
+class VisitCalculator:
     def __init__(self, checkpoints: Checkpoints, visits: VisitRepository):
         # Make sure the checkpoints are sorted
         self._checkpoints = dict(sorted(checkpoints.items()))
