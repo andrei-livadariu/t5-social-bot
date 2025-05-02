@@ -9,7 +9,6 @@ from dotenv import load_dotenv
 from helpers.access_checker import AccessChecker
 from helpers.visit_calculator import VisitCalculator
 from helpers.points import Points
-from helpers.raffle import Raffle
 from helpers.chat_target import ChatTarget
 from integrations.google.api import GoogleApi
 from integrations.google.sheets.databases.visits_database import VisitsDatabase
@@ -21,7 +20,6 @@ from integrations.google.sheets.databases.management_database import ManagementD
 from modules.help import HelpModule
 from modules.points import PointsModule
 from modules.donate import DonateModule
-from modules.raffle import RaffleModule
 from modules.birthday import BirthdayModule
 from modules.events import EventsModule
 from modules.visits import VisitsModule
@@ -91,8 +89,6 @@ def main() -> None:
         visits=visits.visits,
     )
 
-    raffle = Raffle(loy, entries=community.raffle_entries, title="Euro 2024 Sweepstakes", ticket_price=Points(5), max_tickets=3, is_active=False)
-
     modules = [
         PointsModule(loy=loy, users=community.users, timezone=config.timezone),
         DonateModule(loy=loy, ac=ac, users=community.users, announcement_chats=config.announcement_chats),
@@ -103,7 +99,6 @@ def main() -> None:
             timezone=config.timezone,
             admin_chats=config.admin_chats,
         ),
-        RaffleModule(raffle=raffle, users=community.users),
         BirthdayModule(
             loy=loy,
             ac=ac,
