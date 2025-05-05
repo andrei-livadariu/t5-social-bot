@@ -21,7 +21,7 @@ from integrations.loyverse.api import LoyverseApi
 
 logger = logging.getLogger(__name__)
 
-BIRTHDAY_ANNOUNCEMENT = """La Mulți Ani {users} 🎉
+BIRTHDAY_MESSAGE = """La Mulți Ani {user} 🎉
 
 {message}
 
@@ -29,11 +29,10 @@ Enjoy {points} Loyalty Points from T5 🎁
 """
 
 class BirthdayModule(BaseModule):
-    def __init__(self, loy: LoyverseApi, ac: AccessChecker, users: UserRepository, announcement_chats: set[ChatTarget] = None, admin_chats: set[ChatTarget] = None, points_to_award: Points = Points(5), timezone: Optional[pytz.timezone] = None):
+    def __init__(self, loy: LoyverseApi, ac: AccessChecker, users: UserRepository, admin_chats: set[ChatTarget] = None, points_to_award: Points = Points(5), timezone: Optional[pytz.timezone] = None):
         self.loy: LoyverseApi = loy
         self.ac: AccessChecker = ac
         self.users: UserRepository = users
-        self.announcement_chats: set[ChatTarget] = (announcement_chats or set()).copy()
         self.admin_chats: set[ChatTarget] = (admin_chats or set()).copy()
         self.points_to_award: Points = points_to_award
         self.timezone: Optional[pytz.timezone] = timezone
@@ -61,31 +60,20 @@ class BirthdayModule(BaseModule):
 
         logger.info(f"The following users have birthdays today: {users}")
 
-        self._add_points(users)
-        await self._announce_birthdays(users, context)
-
-    def _add_points(self, users: set[User]) -> None:
         for user in users:
-            self.loy.add_points(user, self.points_to_award)
+            await self._process_user(user, context)
 
-    async def _announce_birthdays(self, users: set[User], context: ContextTypes.DEFAULT_TYPE) -> None:
-        if not self.announcement_chats:
-            logger.warning('There are no chats to announce the birthdays to.')
-            return
+    async def _process_user(self, user: User, context: ContextTypes.DEFAULT_TYPE) -> None:
+        self.loy.add_points(user, self.points_to_award)
 
-        if not users:
-            return
+        if user.telegram_id:
+            message = BIRTHDAY_MESSAGE.format(
+                user=user.first_name,
+                message=birthday_congratulations.random,
+                points=self.points_to_award
+            )
 
-        users_text = BirthdayModule._enumerate([user.friendly_name for user in users])
-
-        announcement = BIRTHDAY_ANNOUNCEMENT.format(
-            users=users_text,
-            message=birthday_congratulations.random,
-            points=self.points_to_award
-        )
-
-        for target in self.announcement_chats:
-            await context.bot.send_message(target.chat_id, announcement, message_thread_id=target.chat_id)
+            await context.bot.send_message(user.telegram_id, message)
 
     async def _announce_advance_birthdays(self, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not self.admin_chats:

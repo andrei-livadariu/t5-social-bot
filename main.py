@@ -103,7 +103,6 @@ def main() -> None:
             loy=loy,
             ac=ac,
             users=community.users,
-            announcement_chats=config.announcement_chats,
             admin_chats=config.admin_chats,
             points_to_award=config.birthday_points,
             timezone=config.timezone,
