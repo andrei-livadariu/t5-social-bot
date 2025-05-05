@@ -29,6 +29,9 @@ class UsersTable(
         self._by_birthday = BucketIndex(lambda user: user.birthday, self._lock)
         self._by_prefix = PrefixSearchIndex(UsersTable._search_keys, self._lock)
 
+    def get_all(self) -> list[User]:
+        return list(self._by_full_name.raw().values())
+
     def get_by_full_name(self, full_name: str) -> Optional[User]:
         return self._by_full_name.get(full_name)
 

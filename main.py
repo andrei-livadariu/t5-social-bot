@@ -115,7 +115,13 @@ def main() -> None:
             admin_chats=config.admin_chats,
         ),
         TasksModule(tasks=management.tasks, tasks_chats=config.tasks_chats, timezone=config.timezone),
-        AnnouncementsModule(team_schedule_chats=config.team_schedule_chats, timezone=config.timezone),
+        AnnouncementsModule(
+            ac=ac,
+            users=community.users,
+            visits=visits.visits,
+            team_schedule_chats=config.team_schedule_chats,
+            timezone=config.timezone
+        ),
         TrackingModule(users=community.users, timezone=config.timezone),
     ]
 

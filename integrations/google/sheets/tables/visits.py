@@ -1,6 +1,6 @@
 import gspread
 
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import Optional, TYPE_CHECKING
 
 from data.models.user import User
@@ -34,6 +34,18 @@ class VisitsTable(
         visits_in_month = [(entry.full_name, entry.visits_by_month.get(month, 0)) for entry in all_visitors]
         visitors_in_month = [(full_name, visits) for full_name, visits in visits_in_month if visits]
         return visitors_in_month
+
+    def has_visited_since(self, user: User, since: datetime|timedelta) -> bool:
+        entry = self.get_by_user(user)
+
+        if not entry.last_visit:
+            return False
+
+        if isinstance(since, timedelta):
+            since = datetime.now(self._database.timezone) - since
+
+        return entry.last_visit > since
+
 
     def save(self, entry: VisitsEntry) -> None:
         self.save_all([entry])
