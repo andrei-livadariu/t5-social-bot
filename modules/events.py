@@ -29,8 +29,9 @@ class EventsModule(BaseModule):
     def install(self, application: Application) -> None:
         application.add_handlers([
             CommandHandler('start', self._display_events, filters.Regex('event')),
-            CommandHandler('event', self._display_events),
-            CommandHandler('events', self._display_events),
+            # These commands can only be run in private chats, except if you are a bot master
+            CommandHandler('event', self._display_events, filters.ChatType.PRIVATE | self.ac.filter_master),
+            CommandHandler('events', self._display_events, filters.ChatType.PRIVATE | self.ac.filter_master),
             CallbackQueryHandler(self._display_events, pattern='^events/list$'),
         ])
 
@@ -45,10 +46,6 @@ class EventsModule(BaseModule):
         ]
 
     async def _display_events(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        # This command can only be run in private chats, except if you are a bot master
-        if not (update.callback_query or update.message.chat.type == ChatType.PRIVATE) and not self.ac.is_master(update.effective_user.username):
-            return
-
         try:
             now = datetime.now(self.timezone)
             today_text = self._format_today(now)

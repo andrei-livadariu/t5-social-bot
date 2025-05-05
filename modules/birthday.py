@@ -39,7 +39,7 @@ class BirthdayModule(BaseModule):
         self.timezone: Optional[pytz.timezone] = timezone
 
     def install(self, application: Application) -> None:
-        application.add_handler(CommandHandler('force_announce_birthdays', self._force_announce_birthdays, filters.ChatType.PRIVATE))
+        application.add_handler(CommandHandler('force_announce_birthdays', self._force_announce_birthdays, filters.ChatType.PRIVATE & self.ac.filter_master))
 
         daily_time = time(0, 0, 0, 0, self.timezone)
         application.job_queue.run_daily(self._process_birthdays, daily_time)
@@ -48,9 +48,6 @@ class BirthdayModule(BaseModule):
         logger.info("Birthday module installed")
 
     async def _force_announce_birthdays(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        if not self.ac.is_master(update.effective_user.username):
-            return
-
         await self._process_birthdays(context)
 
     async def _process_birthdays(self, context: ContextTypes.DEFAULT_TYPE) -> None:
