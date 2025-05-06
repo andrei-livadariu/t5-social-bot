@@ -36,7 +36,6 @@ class PointsModule(BaseModule):
         logger.info("Points module installed")
 
         application.job_queue.run_daily(self._send_reminders, time(12, 0, 0, 0, self._timezone), days=(1,))
-        application.job_queue.run_once(self._send_reminders, when=5)
 
     def get_menu_buttons(self) -> list[list[InlineKeyboardButton]]:
         return [
