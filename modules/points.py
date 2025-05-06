@@ -1,14 +1,14 @@
 import pytz
 import logging
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 
 from telegram import Update, InlineKeyboardButton
 from telegram.constants import ChatType
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
 from data.models.user import User
-from data.models.user_role import UserRole
 from data.repositories.user import UserRepository
+from data.repositories.visit import VisitRepository
 
 from modules.base_module import BaseModule
 from helpers.exceptions import UserFriendlyError
@@ -22,10 +22,11 @@ logger = logging.getLogger(__name__)
 
 
 class PointsModule(BaseModule):
-    def __init__(self, loy: LoyverseApi, users: UserRepository, timezone: pytz.timezone = None):
-        self.loy = loy
-        self.users = users
-        self.timezone = timezone
+    def __init__(self, loy: LoyverseApi, users: UserRepository, visits: VisitRepository, timezone: pytz.timezone = None):
+        self._loy = loy
+        self._users = users
+        self._visits = visits
+        self._timezone = timezone
 
     def install(self, application: Application) -> None:
         application.add_handlers([
@@ -34,7 +35,8 @@ class PointsModule(BaseModule):
         ])
         logger.info("Points module installed")
 
-        application.job_queue.run_daily(self._send_reminders, time(12, 0, 0, 0, self.timezone), days=(1,))
+        application.job_queue.run_daily(self._send_reminders, time(12, 0, 0, 0, self._timezone), days=(1,))
+        application.job_queue.run_once(self._send_reminders, when=5)
 
     def get_menu_buttons(self) -> list[list[InlineKeyboardButton]]:
         return [
@@ -44,7 +46,7 @@ class PointsModule(BaseModule):
     async def _balance(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         try:
             user = self._validate_user(update)
-            balance = self.loy.get_balance(user).to_integral()
+            balance = self._loy.get_balance(user).to_integral()
             sarc = points_balance_sarcasm.random
 
             if update.effective_chat.type == ChatType.PRIVATE:
@@ -68,10 +70,10 @@ class PointsModule(BaseModule):
 
     async def _send_reminders(self, context: ContextTypes.DEFAULT_TYPE) -> None:
         # Every 2 weeks = only even week numbers; this is not perfect but it works
-        if datetime.now(self.timezone).isocalendar().week % 2 != 0:
+        if datetime.now(self._timezone).isocalendar().week % 2 != 0:
             return
 
-        for user, points in self.loy.get_all_points():
+        for user, points in self._loy.get_all_points():
             if self._should_send_reminder(user, points):
                 balance = points.to_integral()
                 sarc = points_balance_sarcasm.random
@@ -79,14 +81,14 @@ class PointsModule(BaseModule):
                 await context.bot.send_message(user.telegram_id, message)
 
     def _should_send_reminder(self, user: User, points: Points) -> bool:
-        return user.telegram_id and (not user.role.is_staff) and points > Points(15) and (datetime.now(self.timezone) - user.last_visit).days < 60
+        return user.telegram_id and (not user.role.is_staff) and points >= Points(15) and self._visits.has_visited_since(user, timedelta(days=60))
 
     def _validate_user(self, update: Update) -> User:
         sender_name = update.effective_user.username
         if not sender_name:
             raise UserFriendlyError("I don't really know who you are - to donate or receive points you first need to create a username in Telegram.")
 
-        sender = self.users.get_by_telegram_name(sender_name)
+        sender = self._users.get_by_telegram_name(sender_name)
         if not sender:
             raise UserFriendlyError("Sorry, but this feature is for Community Champions only.")
 

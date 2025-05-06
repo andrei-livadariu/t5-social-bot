@@ -90,7 +90,7 @@ def main() -> None:
     )
 
     modules = [
-        PointsModule(loy=loy, users=community.users, timezone=config.timezone),
+        PointsModule(loy=loy, users=community.users, visits=visits.visits, timezone=config.timezone),
         DonateModule(loy=loy, ac=ac, users=community.users, announcement_chats=config.announcement_chats),
         VisitsModule(
             loy=loy,
