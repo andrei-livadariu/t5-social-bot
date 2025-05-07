@@ -1,4 +1,6 @@
 import logging
+import re
+
 import pytz
 from datetime import time, timedelta
 
@@ -9,6 +11,7 @@ from telegram.constants import ParseMode
 from telegram.ext import Application, ContextTypes, CommandHandler, filters, CallbackQueryHandler
 
 from data.models.user import User
+from data.models.user_role import UserRole
 from data.repositories.user import UserRepository
 from data.repositories.visit import VisitRepository
 
@@ -20,7 +23,25 @@ from modules.base_module import BaseModule
 
 logger = logging.getLogger(__name__)
 
-ANNOUNCE_HELP_TEXT = "To use this command you need to write it like this:\n/announce (message)\nFor example:\n/announce Good news everyone!"
+ALL_USERS = 'all'
+ANNOUNCE_HELP_TEXT = """This command can be used to send announcements to the champions through the bot.
+
+Champions will receive announcements if they meet the following criteria:
+- They must have previously talked to the bot
+- They must not be marked as inactive
+- Only champions who have recently visited will receive the message - this can be customized through the cutoff parameter
+
+The cutoff parameter can be any number of days. Only champions who have visited within that number of days will receive the message. You can also write "all" to get everyone regardless of visits.
+
+To use this command you need to write it like this:
+
+/announce (cutoff) (message)
+
+For example:
+
+/announce 60 Hello everyone who visited in the last 2 months!
+/announce 7 Good news for everyone who visited in the last week!
+/announce all Greetings to everyone, no matter when you visited!"""
 
 
 class AnnouncementsModule(BaseModule):
@@ -44,20 +65,24 @@ class AnnouncementsModule(BaseModule):
 
     async def _announce(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         try:
-            text_to_strip = '/announce '
+            if not context.args:
+                raise CommandSyntaxError()
+
+            cutoff_string = context.args[0]
+            self._validate_cutoff(cutoff_string)
 
             raw_message = update.message.text_html_urled
-            if not raw_message.startswith(text_to_strip):
-                raise CommandSyntaxError()
-
-            parsed_message = raw_message[len(text_to_strip):].lstrip()
-            if not parsed_message:
-                raise CommandSyntaxError()
+            parsed_message = re.sub(
+                r"^/announce\s+" + cutoff_string + r"\s+",
+                "",
+                raw_message,
+                count=1
+            )
 
             message_hash = str(hash(parsed_message))
             self._announcements_cache[message_hash] = parsed_message
 
-            await update.message.reply_html(parsed_message, do_quote=False, reply_markup=self._confirm_keyboard(message_hash))
+            await update.message.reply_html(parsed_message, do_quote=False, reply_markup=self._confirm_keyboard(message_hash, cutoff_string))
         except CommandSyntaxError:
             await update.message.reply_text(ANNOUNCE_HELP_TEXT)
         except UserFriendlyError as e:
@@ -69,15 +94,17 @@ class AnnouncementsModule(BaseModule):
     async def _confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         try:
             args = update.callback_query.data.split('/')
-            if len(args) < 3:
+            if len(args) < 4:
                 raise UserFriendlyError("There was an error and I could not understand your command. Please try again.")
+
+            cutoff = self._validate_cutoff(args[3])
 
             message_hash = args[2]
             message = self._announcements_cache.pop(message_hash, None)
             if message is None:
                 raise UserFriendlyError("There was an error and I can't seem to remember what you were trying to say. These buttons expire after a while, don't cha know? Please try again.")
 
-            users = self._get_contactable_users()
+            users = self._get_contactable_users(cutoff)
 
             await update.callback_query.answer()
 
@@ -118,22 +145,45 @@ class AnnouncementsModule(BaseModule):
             await update.callback_query.edit_message_text(f"BeeDeeBeeBoop 🤖 Error : {e}")
 
     @staticmethod
-    def _confirm_keyboard(message_hash: str) -> InlineKeyboardMarkup:
+    def _confirm_keyboard(message_hash: str, cutoff_string: str) -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup([
             [
-                InlineKeyboardButton("Confirm and send", callback_data=f"announce/confirm/{message_hash}"),
+                InlineKeyboardButton("Confirm and send", callback_data=f"announce/confirm/{message_hash}/{cutoff_string}"),
                 InlineKeyboardButton("Cancel", callback_data=f"announce/cancel/{message_hash}"),
             ]
         ])
 
-    def _get_contactable_users(self) -> list[User]:
-        all_users = self._users.get_all()
-        return [user for user in all_users if self._can_contact_user(user)]
+    @staticmethod
+    def _validate_cutoff(cutoff_string: str) -> timedelta|None:
+        cutoff_string = cutoff_string.strip().lower()
 
-    def _can_contact_user(self, user: User) -> bool:
+        if cutoff_string == ALL_USERS:
+            return None
+
+        try:
+            cutoff_int = int(cutoff_string)
+            return timedelta(days=cutoff_int)
+        except ValueError:
+            raise UserFriendlyError(f"The cutoff period should either be a number of days or the text \"{ALL_USERS}\". Type /announce to see detailed instructions.")
+
+    def _get_contactable_users(self, cutoff: timedelta|None) -> list[User]:
+        all_users = self._users.get_all()
+        return [user for user in all_users if self._can_contact_user(user, cutoff)]
+
+    def _can_contact_user(self, user: User, cutoff: timedelta|None) -> bool:
         # People with a telegram id
-        # And who have visited in the last couple of months
-        return user.telegram_id and self._visits.has_visited_since(user, timedelta(days=60))
+        if not user.telegram_id:
+            return False
+
+        # Skip inactive users
+        if user.role == UserRole.INACTIVE:
+            return False
+
+        # If we have a cutoff, make sure the user has visited since that cutoff
+        if cutoff and not self._visits.has_visited_since(user, cutoff):
+            return False
+
+        return True
 
     async def _send_schedule_announcement(self, context: ContextTypes.DEFAULT_TYPE):
         for target in self._team_schedule_chats:
