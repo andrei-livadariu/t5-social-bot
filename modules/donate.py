@@ -8,10 +8,10 @@ from data.models.user import User
 from data.repositories.user import UserRepository
 
 from modules.base_module import BaseModule
-from helpers.access_checker import AccessChecker
-from helpers.exceptions import UserFriendlyError, CommandSyntaxError
-from helpers.points import Points
-from helpers.chat_target import ChatTarget
+from helpers.business_logic.access_checker import AccessChecker
+from helpers.telegram.exceptions import UserFriendlyError, CommandSyntaxError
+from helpers.business_logic.points import Points
+from helpers.telegram.chat_target import ChatTarget
 
 from messages import donate_sarcasm
 

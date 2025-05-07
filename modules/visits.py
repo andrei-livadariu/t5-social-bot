@@ -8,12 +8,12 @@ from telegram.ext import Application, ContextTypes, CommandHandler, CallbackQuer
 
 from data.models.user import User
 from data.repositories.user import UserRepository
-from helpers.chat_target import ChatTarget
+from helpers.telegram.chat_target import ChatTarget
 
 from modules.base_module import BaseModule
-from helpers.points import Points
-from helpers.visit_calculator import VisitCalculator, ReachedCheckpoints
-from helpers.exceptions import UserFriendlyError
+from helpers.business_logic.points import Points
+from helpers.business_logic.visit_calculator import VisitCalculator, ReachedCheckpoints
+from helpers.telegram.exceptions import UserFriendlyError
 
 from integrations.loyverse.api import LoyverseApi
 

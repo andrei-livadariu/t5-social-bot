@@ -1,7 +1,7 @@
 from decimal import *
 from typing import Union
 
-from helpers.exceptions import UserFriendlyError
+from helpers.telegram.exceptions import UserFriendlyError
 
 
 class Points:

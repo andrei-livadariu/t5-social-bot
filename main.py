@@ -6,10 +6,10 @@ import json
 from telegram.ext import ApplicationBuilder
 from dotenv import load_dotenv
 
-from helpers.access_checker import AccessChecker
-from helpers.visit_calculator import VisitCalculator
-from helpers.points import Points
-from helpers.chat_target import ChatTarget
+from helpers.business_logic.access_checker import AccessChecker
+from helpers.business_logic.visit_calculator import VisitCalculator
+from helpers.business_logic.points import Points
+from helpers.telegram.chat_target import ChatTarget
 from integrations.google.api import GoogleApi
 from integrations.google.sheets.databases.visits_database import VisitsDatabase
 

@@ -5,12 +5,12 @@ import pytz
 from typing import Optional, Generator
 from datetime import datetime
 
-import helpers.json
-from helpers.points import Points
+import helpers.utils.json
+from helpers.business_logic.points import Points
 
 from data.models.user import User
 from data.repositories.user import UserRepository
-from helpers.visit_calculator import RawVisit
+from helpers.business_logic.visit_calculator import RawVisit
 
 from integrations.loyverse.customer import Customer
 from integrations.loyverse.receipt import Receipt
@@ -194,7 +194,7 @@ class LoyverseApi:
                 break
 
     def _save_customer(self, customer: Customer) -> None:
-        data = json.dumps(customer, default=helpers.json.default)
+        data = json.dumps(customer, default=helpers.utils.json.default)
         if self.read_only:
             logger.info(data)
             return

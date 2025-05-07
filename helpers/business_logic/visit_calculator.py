@@ -7,7 +7,7 @@ from data.models.user import User
 from data.models.visits_entry import VisitsEntry
 from data.repositories.visit import VisitRepository
 
-from helpers.points import Points
+from helpers.business_logic.points import Points
 
 logger = logging.getLogger(__name__)
 

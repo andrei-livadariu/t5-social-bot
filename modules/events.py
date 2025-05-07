@@ -4,13 +4,13 @@ import logging
 from typing import Optional
 
 from telegram import Update, InlineKeyboardButton
-from telegram.constants import ChatType, ParseMode
+from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, filters
 
 from modules.base_module import BaseModule
-from helpers.access_checker import AccessChecker
-from helpers.exceptions import UserFriendlyError
-from helpers.chat_target import ChatTarget
+from helpers.business_logic.access_checker import AccessChecker
+from helpers.telegram.exceptions import UserFriendlyError
+from helpers.telegram.chat_target import ChatTarget
 from data.repositories.event import EventRepository
 from data.models.event import Event
 

@@ -12,9 +12,9 @@ from data.models.user import User
 from data.repositories.user import UserRepository
 from data.repositories.visit import VisitRepository
 
-from helpers.access_checker import AccessChecker
-from helpers.chat_target import ChatTarget
-from helpers.exceptions import CommandSyntaxError, UserFriendlyError
+from helpers.business_logic.access_checker import AccessChecker
+from helpers.telegram.chat_target import ChatTarget
+from helpers.telegram.exceptions import CommandSyntaxError, UserFriendlyError
 
 from modules.base_module import BaseModule
 

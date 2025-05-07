@@ -1,4 +1,4 @@
-from helpers.message_bag import MessageBag
+from helpers.utils.message_bag import MessageBag
 
 birthday_congratulations = MessageBag([
     "Happy birthday to someone who's aging like fine wine – getting better with every passing year!",

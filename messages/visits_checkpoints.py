@@ -1,4 +1,4 @@
-from helpers.message_bag import MessageBag
+from helpers.utils.message_bag import MessageBag
 
 visits_checkpoints = {
     5: MessageBag([

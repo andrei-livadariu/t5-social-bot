@@ -1,6 +1,6 @@
 from typing import Optional
 
-from helpers.points import Points
+from helpers.business_logic.points import Points
 
 
 class Customer:

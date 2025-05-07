@@ -1,4 +1,4 @@
-from helpers.message_bag import MessageBag
+from helpers.utils.message_bag import MessageBag
 
 donate_sarcasm = MessageBag([
     "Spreading your wealth like a true philanthropist!",

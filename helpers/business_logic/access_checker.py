@@ -1,5 +1,5 @@
 from data.models.user import User
-from helpers.username_filter import UsernameFilter
+from helpers.telegram.username_filter import UsernameFilter
 
 
 class AccessChecker:

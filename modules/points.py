@@ -11,8 +11,8 @@ from data.repositories.user import UserRepository
 from data.repositories.visit import VisitRepository
 
 from modules.base_module import BaseModule
-from helpers.exceptions import UserFriendlyError
-from helpers.points import Points
+from helpers.telegram.exceptions import UserFriendlyError
+from helpers.business_logic.points import Points
 
 from messages import points_balance_sarcasm
 

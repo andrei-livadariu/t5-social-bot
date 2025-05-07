@@ -1,4 +1,4 @@
-from helpers.message_bag import MessageBag
+from helpers.utils.message_bag import MessageBag
 
 points_balance_sarcasm = MessageBag([
     "Oh, congratulations on your infinite wealth! Can I borrow a dollar?",

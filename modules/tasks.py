@@ -13,8 +13,8 @@ from data.models.task_list import TaskList
 from data.models.task import Task
 from data.repositories.task import TaskRepository
 
-from helpers.exceptions import UserFriendlyError, CommandSyntaxError
-from helpers.chat_target import ChatTarget
+from helpers.telegram.exceptions import UserFriendlyError, CommandSyntaxError
+from helpers.telegram.chat_target import ChatTarget
 
 from modules.base_module import BaseModule
 
