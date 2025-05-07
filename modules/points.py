@@ -32,6 +32,7 @@ class PointsModule(BaseModule):
         application.add_handlers([
             CommandHandler("balance", self._balance),
             CallbackQueryHandler(self._balance, pattern="^points/balance$"),
+            CallbackQueryHandler(self._claim, pattern="^points/claim/"),
         ])
         logger.info("Points module installed")
 
@@ -67,6 +68,31 @@ class PointsModule(BaseModule):
         else:
             await update.message.reply_html(reply, disable_web_page_preview=True)
 
+    async def _claim(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        try:
+            args = update.callback_query.data.split('/')
+            if len(args) < 3:
+                raise UserFriendlyError("There was an error and the points could not be claimed. Please try again.")
+
+            points = self._validate_points(args[2])
+            user = self._validate_user(update)
+
+            self._loy.add_points(user, points)
+
+            # Remove the button from the original message
+            await update.callback_query.edit_message_reply_markup()
+
+            # Inform the user about their points
+            if user.telegram_id:
+                await context.bot.send_message(user.telegram_id, f"You have claimed {points} point{points.plural}! Don't forget to spend them at the bar on your future visits!")
+            else:
+                await update.callback_query.answer(f"You have claimed {points} point{points.plural}!")
+        except UserFriendlyError as e:
+            await update.callback_query.answer(str(e))
+        except Exception as e:
+            logger.exception(e)
+            await update.callback_query.answer(f"BeeDeeBeeBoop 🤖 Error : {e}")
+
     async def _send_reminders(self, context: ContextTypes.DEFAULT_TYPE) -> None:
         # Every 2 weeks = only even week numbers; this is not perfect but it works
         if datetime.now(self._timezone).isocalendar().week % 2 != 0:
@@ -92,3 +118,10 @@ class PointsModule(BaseModule):
             raise UserFriendlyError("Sorry, but this feature is for Community Champions only.")
 
         return sender
+
+    @staticmethod
+    def _validate_points(raw_points: str) -> Points:
+        points = Points(raw_points)
+        if not points.is_positive:
+            raise UserFriendlyError("There was an error with the number of points to claim. Please try again!")
+        return points

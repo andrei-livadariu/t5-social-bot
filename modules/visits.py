@@ -9,6 +9,7 @@ from telegram.ext import Application, ContextTypes, CommandHandler, CallbackQuer
 from data.models.user import User
 from data.repositories.user import UserRepository
 from helpers.telegram.chat_target import ChatTarget
+from helpers.telegram.points_claim import PointsClaim
 
 from modules.base_module import BaseModule
 from helpers.business_logic.points import Points
@@ -146,7 +147,6 @@ class VisitsModule(BaseModule):
             for month, checkpoints in month_checkpoints.items():
                 total_points = sum(checkpoints.values(), start=Points(0))
                 a_total_of = 'a total of ' if len(checkpoints) > 1 else ''
-                self.loy.add_points(user, total_points)
                 print(f"{user.full_name} receives {a_total_of}{total_points} point{total_points.plural} for visits in {month.strftime('%B')}")
 
                 if user.telegram_id:
@@ -155,7 +155,10 @@ class VisitsModule(BaseModule):
                     message = (messages.random + "\n\n") if messages else ''
                     month_text = 'this month' if month.month == right_now.month else f"in {month.strftime('%B')}"
                     announcement = f"{message}Because you visited us on {max_checkpoint} occasions {month_text}, we want to thank you for your persistence with {a_total_of}{total_points} point{total_points.plural}!"
-                    await context.bot.send_message(user.telegram_id, announcement)
+                    await context.bot.send_message(user.telegram_id, announcement, reply_markup=PointsClaim(total_points).keyboard())
+                else:
+                    # If the user has no telegram id, they can't claim the points, so we just award them
+                    self.loy.add_points(user, total_points)
 
     def _validate_user(self, update: Update) -> User:
         sender_name = update.effective_user.username
