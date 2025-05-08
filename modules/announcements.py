@@ -24,14 +24,14 @@ from modules.base_module import BaseModule
 logger = logging.getLogger(__name__)
 
 ALL_USERS = 'all'
-ANNOUNCE_HELP_TEXT = """This command can be used to send announcements to the champions through the bot.
+ANNOUNCE_HELP_TEXT = """This command can be used to send announcements to the community members through the bot.
 
-Champions will receive announcements if they meet the following criteria:
+Community members will receive announcements if they meet the following criteria:
 - They must have previously talked to the bot
 - They must not be marked as inactive
-- Only champions who have recently visited will receive the message - this can be customized through the cutoff parameter
+- Only members who have recently visited will receive the message - this can be customized through the cutoff parameter
 
-The cutoff parameter can be any number of days. Only champions who have visited within that number of days will receive the message. You can also write "all" to get everyone regardless of visits.
+The cutoff parameter can be any number of days. Only members who have visited within that number of days will receive the message. You can also write "all" to get everyone regardless of visits.
 
 To use this command you need to write it like this:
 
@@ -109,10 +109,10 @@ class AnnouncementsModule(BaseModule):
             await update.callback_query.answer()
 
             if not users:
-                await update.callback_query.edit_message_text("Somehow, there are no eligible champions to receive this announcement. I couldn't send it to anyone, sorry!")
+                await update.callback_query.edit_message_text("Somehow, there are no eligible community members to receive this announcement. I couldn't send it to anyone, sorry!")
                 return
 
-            await update.callback_query.edit_message_text(f"Done! I'm sending your announcement to {len(users)} eligible champions right now. Hopefully it brightens up their day!")
+            await update.callback_query.edit_message_text(f"Done! I'm sending your announcement to {len(users)} eligible community members right now. Hopefully it brightens up their day!")
 
             for user in users:
                 await self._send_user_message(context, user.telegram_id, message)

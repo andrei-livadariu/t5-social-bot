@@ -112,7 +112,7 @@ class UsersTable(
         try:
             return UserRole(user_role_string.strip().lower())
         except ValueError:
-            return UserRole.CHAMPION
+            return UserRole.COMMUNITY
 
     @staticmethod
     def _search_keys(user: User) -> list[str]:

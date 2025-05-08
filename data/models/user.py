@@ -10,7 +10,7 @@ from data.models.user_role import UserRole
 class User:
     full_name: str
     aliases: list[str] = field(default_factory=list)
-    role: UserRole = UserRole.CHAMPION
+    role: UserRole = UserRole.COMMUNITY
     telegram_username: str = ''
     birthday: Optional[str] = None
     telegram_id: Optional[int] = None

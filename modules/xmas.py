@@ -9,7 +9,7 @@ from data.repositories.user import UserRepository
 
 from modules.base_module import BaseModule
 from helpers.business_logic.access_checker import AccessChecker
-from helpers.telegram.exceptions import UserFriendlyError, CommandSyntaxError
+from helpers.telegram.exceptions import UserFriendlyError, CommandSyntaxError, MissingUsernameError, UserNotFoundError
 from helpers.business_logic.points import Points
 
 from messages import donate_sarcasm
@@ -126,11 +126,11 @@ class XmasModule(BaseModule):
     def _validate_sender(self, update: Update) -> User:
         sender_name = update.effective_user.username
         if not sender_name:
-            raise UserFriendlyError("I don't really know who you are - to use this feature you first need to create a username in Telegram.")
+            raise MissingUsernameError()
 
         sender = self.users.get_by_telegram_name(sender_name)
         if not sender:
-            raise UserFriendlyError("Sorry, but this feature is for Community Champions only.")
+            raise UserNotFoundError()
 
         return sender
 
@@ -139,7 +139,7 @@ class XmasModule(BaseModule):
             try:
                 self.loy.remove_points(sender, points)
             except InvalidCustomerError as error:
-                raise UserFriendlyError(f"You do not have a bar tab as a Community Champion. You should ask the hard-working elves at the bar to make one for you.") from error
+                raise UserFriendlyError(f"You do not have a bar tab as a community member. You should ask the hard-working elves at the bar to make one for you.") from error
             except InsufficientFundsError as error:
                 raise UserFriendlyError("Your generosity is the stuff of legends, but you cannot donate more points than you have in your balance.") from error
             except Exception as error:

@@ -9,7 +9,7 @@ from data.repositories.user import UserRepository
 
 from modules.base_module import BaseModule
 from helpers.business_logic.access_checker import AccessChecker
-from helpers.telegram.exceptions import UserFriendlyError, CommandSyntaxError
+from helpers.telegram.exceptions import UserFriendlyError, CommandSyntaxError, UserNotFoundError, MissingUsernameError
 from helpers.business_logic.points import Points
 from helpers.telegram.chat_target import ChatTarget
 
@@ -182,11 +182,11 @@ class DonateModule(BaseModule):
     def _validate_sender(self, update: Update) -> User:
         sender_name = update.effective_user.username
         if not sender_name:
-            raise UserFriendlyError("I don't really know who you are - to donate or receive points you first need to create a username in Telegram.")
+            raise MissingUsernameError()
 
         sender = self.users.get_by_telegram_name(sender_name)
         if not sender:
-            raise UserFriendlyError("Sorry, but the donate feature is for Community Champions only.")
+            raise UserNotFoundError()
 
         return sender
 
@@ -196,7 +196,7 @@ class DonateModule(BaseModule):
 
         recipients = self.users.search(query)
         if not recipients:
-            raise UserFriendlyError("I don't know this strange person that you are trying to donate to - is this one of our Community Champions?")
+            raise UserFriendlyError("I don't know this strange person that you are trying to donate to - is this one of our community members?")
 
         # Don't allow sending to yourself
         recipients.discard(sender)
@@ -209,7 +209,7 @@ class DonateModule(BaseModule):
     def _validate_recipient_direct(self, telegram_name: str, sender: User) -> User:
         recipient = self.users.get_by_telegram_name(telegram_name)
         if not recipient:
-            raise UserFriendlyError("I don't know this strange person that you are trying to donate to - is this one of our Community Champions?")
+            raise UserFriendlyError("I don't know this strange person that you are trying to donate to - is this one of our community members?")
 
         if sender == recipient:
             raise UserFriendlyError("Donating to yourself is like high-fiving in a mirror – impressive to you, but not making the world a better place!")
@@ -221,7 +221,7 @@ class DonateModule(BaseModule):
             try:
                 self.loy.remove_points(sender, points)
             except InvalidCustomerError as error:
-                raise UserFriendlyError(f"You do not have a bar tab as a Community Champion. You should ask Rob to make one for you.") from error
+                raise UserFriendlyError(f"You do not have a bar tab as a community member. You should ask Rob to make one for you.") from error
             except InsufficientFundsError as error:
                 raise UserFriendlyError("Your generosity is the stuff of legends, but you cannot donate more points than you have in your balance.") from error
             except Exception as error:
@@ -230,7 +230,7 @@ class DonateModule(BaseModule):
         try:
             self.loy.add_points(recipient, points)
         except InvalidCustomerError as error:
-            raise UserFriendlyError(f"{recipient.friendly_name} does not have a bar tab as a Community Champion. You should ask Rob to make one for them.") from error
+            raise UserFriendlyError(f"{recipient.friendly_name} does not have a bar tab as a community member. You should ask Rob to make one for them.") from error
         except Exception as error:
             raise UserFriendlyError("The donation has failed - perhaps the stars were not right? You can try again later.") from error
 

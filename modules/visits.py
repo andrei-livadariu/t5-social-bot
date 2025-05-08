@@ -14,7 +14,7 @@ from helpers.telegram.points_claim import PointsClaim
 from modules.base_module import BaseModule
 from helpers.business_logic.points import Points
 from helpers.business_logic.visit_calculator import VisitCalculator, ReachedCheckpoints
-from helpers.telegram.exceptions import UserFriendlyError
+from helpers.telegram.exceptions import UserFriendlyError, MissingUsernameError, UserNotFoundError
 
 from integrations.loyverse.api import LoyverseApi
 
@@ -163,11 +163,11 @@ class VisitsModule(BaseModule):
     def _validate_user(self, update: Update) -> User:
         sender_name = update.effective_user.username
         if not sender_name:
-            raise UserFriendlyError("I don't really know who you are - you first need to create a username in Telegram.")
+            raise MissingUsernameError()
 
         sender = self.users.get_by_telegram_name(sender_name)
         if not sender:
-            raise UserFriendlyError("Sorry, but this feature is for Community Champions only.")
+            raise UserNotFoundError()
 
         return sender
 

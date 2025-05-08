@@ -3,15 +3,16 @@ import logging
 from datetime import datetime, time, timedelta
 
 from telegram import Update, InlineKeyboardButton
-from telegram.constants import ChatType
+from telegram.constants import ChatType, ParseMode
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
 from data.models.user import User
 from data.repositories.user import UserRepository
 from data.repositories.visit import VisitRepository
+from integrations.loyverse.exceptions import InvalidCustomerError
 
 from modules.base_module import BaseModule
-from helpers.telegram.exceptions import UserFriendlyError
+from helpers.telegram.exceptions import UserFriendlyError, UserNotFoundError, MissingUsernameError
 from helpers.business_logic.points import Points
 
 from messages import points_balance_sarcasm
@@ -46,7 +47,12 @@ class PointsModule(BaseModule):
     async def _balance(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         try:
             user = self._validate_user(update)
-            balance = self._loy.get_balance(user).to_integral()
+
+            try:
+                balance = self._loy.get_balance(user).to_integral()
+            except InvalidCustomerError as error:
+                raise UserFriendlyError(f"Want to start earning <b>T5 Social Loyalty Points</b>? Message @roblever to register!") from error
+
             sarc = points_balance_sarcasm.random
 
             if update.effective_chat.type == ChatType.PRIVATE:
@@ -64,7 +70,7 @@ class PointsModule(BaseModule):
 
         if update.callback_query:
             await update.callback_query.answer()
-            await update.callback_query.edit_message_text(reply, disable_web_page_preview=True)
+            await update.callback_query.edit_message_text(reply, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
         else:
             await update.message.reply_html(reply, disable_web_page_preview=True)
 
@@ -111,11 +117,11 @@ class PointsModule(BaseModule):
     def _validate_user(self, update: Update) -> User:
         sender_name = update.effective_user.username
         if not sender_name:
-            raise UserFriendlyError("I don't really know who you are - to donate or receive points you first need to create a username in Telegram.")
+            raise MissingUsernameError()
 
         sender = self._users.get_by_telegram_name(sender_name)
         if not sender:
-            raise UserFriendlyError("Sorry, but this feature is for Community Champions only.")
+            raise UserNotFoundError()
 
         return sender
 
