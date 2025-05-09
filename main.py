@@ -18,6 +18,7 @@ from integrations.google.sheets.databases.community_database import CommunityDat
 from integrations.google.sheets.databases.management_database import ManagementDatabase
 
 from modules.help import HelpModule
+from modules.nominate import NominateModule
 from modules.points import PointsModule
 from modules.donate import DonateModule
 from modules.birthday import BirthdayModule
@@ -121,6 +122,12 @@ def main() -> None:
             visits=visits.visits,
             team_schedule_chats=config.team_schedule_chats,
             timezone=config.timezone
+        ),
+        NominateModule(
+            users=community.users,
+            visits=visits.visits,
+            nominations=community.nominations,
+            timezone=config.timezone,
         ),
         TrackingModule(users=community.users, timezone=config.timezone),
     ]

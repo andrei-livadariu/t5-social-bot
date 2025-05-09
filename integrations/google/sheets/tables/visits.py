@@ -44,8 +44,7 @@ class VisitsTable(
         if isinstance(since, timedelta):
             since = datetime.now(self._database.timezone) - since
 
-        return entry.last_visit > since
-
+        return entry.last_visit >= since
 
     def save(self, entry: VisitsEntry) -> None:
         self.save_all([entry])

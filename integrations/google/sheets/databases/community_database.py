@@ -3,6 +3,7 @@ import pytz
 from integrations.google.api import GoogleApi
 from integrations.google.sheets.contracts.database import Database
 from integrations.google.sheets.tables.events import EventsTable
+from integrations.google.sheets.tables.nominations import NominationsTable
 from integrations.google.sheets.tables.users import UsersTable
 
 
@@ -12,6 +13,7 @@ class CommunityDatabase(Database):
 
         self._users = UsersTable(self, 'MEMBERS')
         self._events = EventsTable(self, 'EVENTS')
+        self._nominations = NominationsTable(self, 'NOMINATIONS')
 
         self.refresh()
 
@@ -22,3 +24,7 @@ class CommunityDatabase(Database):
     @property
     def events(self) -> EventsTable:
         return self._events
+
+    @property
+    def nominations(self) -> NominationsTable:
+        return self._nominations

@@ -1,6 +1,5 @@
 import pytz
 import logging
-from datetime import datetime, time, timedelta
 
 from telegram import Update, InlineKeyboardButton
 from telegram.constants import ChatType, ParseMode
@@ -36,8 +35,6 @@ class PointsModule(BaseModule):
             CallbackQueryHandler(self._claim, pattern="^points/claim/"),
         ])
         logger.info("Points module installed")
-
-        application.job_queue.run_daily(self._send_reminders, time(12, 0, 0, 0, self._timezone), days=(1,))
 
     def get_menu_buttons(self) -> list[list[InlineKeyboardButton]]:
         return [
@@ -98,21 +95,6 @@ class PointsModule(BaseModule):
         except Exception as e:
             logger.exception(e)
             await update.callback_query.answer(f"BeeDeeBeeBoop 🤖 Error : {e}")
-
-    async def _send_reminders(self, context: ContextTypes.DEFAULT_TYPE) -> None:
-        # Every 2 weeks = only even week numbers; this is not perfect but it works
-        if datetime.now(self._timezone).isocalendar().week % 2 != 0:
-            return
-
-        for user, points in self._loy.get_all_points():
-            if self._should_send_reminder(user, points):
-                balance = points.to_integral()
-                sarc = points_balance_sarcasm.random
-                message = f"{sarc}\n\nYou have {balance} T5 Loyalty Point{balance.plural}!\n\nRemember to spend your points at the bar when you visit! Not sure how? Ask our staff for guidance!"
-                await context.bot.send_message(user.telegram_id, message)
-
-    def _should_send_reminder(self, user: User, points: Points) -> bool:
-        return user.telegram_id and (not user.role.is_staff) and points >= Points(15) and self._visits.has_visited_since(user, timedelta(days=60))
 
     def _validate_user(self, update: Update) -> User:
         sender_name = update.effective_user.username
