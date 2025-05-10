@@ -16,6 +16,7 @@ class User:
     telegram_id: Optional[int] = None
     loyverse_id: Optional[str] = None
     last_private_chat: Optional[datetime] = None
+    telegram_blocked: bool = False
 
     @property
     def first_name(self) -> str:
@@ -34,6 +35,10 @@ class User:
     def specific_name(self) -> str:
         name = self.main_alias or self.full_name
         return name + (f" / @{self.telegram_username}" if self.telegram_username else "")
+
+    @property
+    def can_contact(self) -> bool:
+        return self.telegram_id and self.role != UserRole.INACTIVE and not self.telegram_blocked
 
     def __eq__(self, other):
         return self.full_name == other.full_name

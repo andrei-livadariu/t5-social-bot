@@ -1,6 +1,6 @@
 import logging
 import pytz
-from datetime import datetime, timedelta, time
+from datetime import datetime, timedelta, date, time
 
 from telegram import Update, InlineKeyboardButton
 from telegram.constants import ChatType, ParseMode
@@ -9,6 +9,7 @@ from telegram.ext import Application, ContextTypes, CommandHandler, CallbackQuer
 from data.models.user import User
 from data.repositories.user import UserRepository
 from helpers.telegram.chat_target import ChatTarget
+from helpers.telegram.conversation_starter import ConversationStarter
 from helpers.telegram.points_claim import PointsClaim
 
 from modules.base_module import BaseModule
@@ -143,22 +144,37 @@ class VisitsModule(BaseModule):
 
     async def _send_messages(self, updates: dict[User, ReachedCheckpoints], right_now: datetime, context: ContextTypes.DEFAULT_TYPE):
         updates_with_points = {user: points for user, points in updates.items() if points and VisitsModule._can_earn_points(user)}
+
+        prepared_announcements: dict[date, dict[User, (Points, str)]] = {}
+
         for user, month_checkpoints in updates_with_points.items():
             for month, checkpoints in month_checkpoints.items():
                 total_points = sum(checkpoints.values(), start=Points(0))
                 a_total_of = 'a total of ' if len(checkpoints) > 1 else ''
                 print(f"{user.full_name} receives {a_total_of}{total_points} point{total_points.plural} for visits in {month.strftime('%B')}")
 
-                if user.telegram_id:
-                    max_checkpoint = max(checkpoints.keys())
-                    messages = visits_checkpoints.get(max_checkpoint, [])
-                    message = (messages.random + "\n\n") if messages else ''
-                    month_text = 'this month' if month.month == right_now.month else f"in {month.strftime('%B')}"
-                    announcement = f"{message}Because you visited us on {max_checkpoint} occasions {month_text}, we want to thank you for your persistence with {a_total_of}{total_points} point{total_points.plural}!"
-                    await context.bot.send_message(user.telegram_id, announcement, reply_markup=PointsClaim(total_points).keyboard())
-                else:
-                    # If the user has no telegram id, they can't claim the points, so we just award them
-                    self.loy.add_points(user, total_points)
+                max_checkpoint = max(checkpoints.keys())
+                messages = visits_checkpoints.get(max_checkpoint, [])
+                message = (messages.random + "\n\n") if messages else ''
+                month_text = 'this month' if month.month == right_now.month else f"in {month.strftime('%B')}"
+                announcement = f"{message}Because you visited us on {max_checkpoint} occasions {month_text}, we want to thank you for your persistence with {a_total_of}{total_points} point{total_points.plural}!"
+
+                if month not in prepared_announcements:
+                    prepared_announcements[month] = {}
+                prepared_announcements[month][user] = (total_points, announcement)
+
+
+        convo = ConversationStarter(context.bot, self.users)
+        for month, announcements in prepared_announcements.items():
+            await convo.send(
+                recipients=list(announcements.keys()),
+                message=lambda user: {
+                    'text': announcements[user][1],
+                    'reply_markup': PointsClaim(announcements[user][0]).keyboard(),
+                },
+                # Award the points directly if we can't send the message for the user to confirm
+                on_fail=lambda user: self.loy.add_points(user, announcements[user][0]),
+            )
 
     def _validate_user(self, update: Update) -> User:
         sender_name = update.effective_user.username

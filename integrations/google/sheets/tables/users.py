@@ -76,6 +76,7 @@ class UsersTable(
             'telegram_id': model.telegram_id,
             'loyverse_id': model.loyverse_id,
             'last_private_chat': self._database.to_datetime_string(model.last_private_chat),
+            'telegram_blocked': 'BLOCKED' if model.telegram_blocked else '',
         }
 
     def _deserialize(self, row: dict[str, str]) -> Optional[User]:
@@ -93,6 +94,7 @@ class UsersTable(
             telegram_id=UsersTable._parse_int(row.get('telegram_id', '')),
             loyverse_id=row.get('loyverse_id', '').strip(),
             last_private_chat=self._database.from_datetime_string(row.get('last_private_chat', '')),
+            telegram_blocked=row.get('telegram_blocked', '').strip() != '',
         )
 
     @staticmethod

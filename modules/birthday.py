@@ -1,6 +1,6 @@
 import logging
 import pytz
-from typing import Optional
+from typing import Optional, Callable
 from datetime import datetime, date, time, timedelta
 
 from telegram import Update
@@ -9,6 +9,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes, filters
 
 from data.models.user import User
 from data.repositories.user import UserRepository
+from helpers.telegram.conversation_starter import ConversationStarter
 from helpers.telegram.points_claim import PointsClaim
 
 from modules.base_module import BaseModule
@@ -22,9 +23,9 @@ from integrations.loyverse.api import LoyverseApi
 
 logger = logging.getLogger(__name__)
 
-BIRTHDAY_MESSAGE = """La Mulți Ani {user} 🎉
+BIRTHDAY_MESSAGE: Callable[[User, Points], str] = lambda user, points: f"""La Mulți Ani {user.first_name} 🎉
 
-{message}
+{birthday_congratulations.random}
 
 Enjoy {points} Loyalty Points from T5 🎁
 """
@@ -61,21 +62,16 @@ class BirthdayModule(BaseModule):
 
         logger.info(f"The following users have birthdays today: {users}")
 
-        for user in users:
-            await self._process_user(user, context)
-
-    async def _process_user(self, user: User, context: ContextTypes.DEFAULT_TYPE) -> None:
-        if user.telegram_id:
-            message = BIRTHDAY_MESSAGE.format(
-                user=user.first_name,
-                message=birthday_congratulations.random,
-                points=self.points_to_award
-            )
-
-            await context.bot.send_message(user.telegram_id, message, reply_markup=PointsClaim(self.points_to_award).keyboard())
-        else:
-            # If the user has no telegram id, they can't claim the points, so we just award them
-            self.loy.add_points(user, self.points_to_award)
+        convo = ConversationStarter(context.bot, self.users)
+        await convo.send(
+            recipients=users,
+            message=lambda user: {
+                'text': BIRTHDAY_MESSAGE(user, self.points_to_award),
+                'reply_markup': PointsClaim(self.points_to_award).keyboard(),
+            },
+            # Award the points directly if we can't send the message for the user to confirm
+            on_fail=lambda user: self.loy.add_points(user, self.points_to_award),
+        )
 
     async def _announce_advance_birthdays(self, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not self.admin_chats:

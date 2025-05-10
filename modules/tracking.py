@@ -38,7 +38,8 @@ class TrackingModule(BaseModule):
 
             user = user.copy(
                 telegram_id=update.effective_user.id,
-                last_private_chat=datetime.now(self.timezone)
+                last_private_chat=datetime.now(self.timezone),
+                telegram_blocked=False,
             )
             self.users.save(user)
         except Exception as e:

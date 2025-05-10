@@ -4,19 +4,16 @@ import re
 import pytz
 from datetime import time, timedelta
 
-from ratelimit import limits, sleep_and_retry
-
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
-from telegram.constants import ParseMode
 from telegram.ext import Application, ContextTypes, CommandHandler, filters, CallbackQueryHandler
 
 from data.models.user import User
-from data.models.user_role import UserRole
 from data.repositories.user import UserRepository
 from data.repositories.visit import VisitRepository
 
 from helpers.business_logic.access_checker import AccessChecker
 from helpers.telegram.chat_target import ChatTarget
+from helpers.telegram.conversation_starter import ConversationStarter
 from helpers.telegram.exceptions import CommandSyntaxError, UserFriendlyError
 
 from modules.base_module import BaseModule
@@ -104,6 +101,7 @@ class AnnouncementsModule(BaseModule):
             if message is None:
                 raise UserFriendlyError("There was an error and I can't seem to remember what you were trying to say. These buttons expire after a while, don't cha know? Please try again.")
 
+            convo = ConversationStarter(context.bot, self._users)
             users = self._get_contactable_users(cutoff)
 
             await update.callback_query.answer()
@@ -114,18 +112,12 @@ class AnnouncementsModule(BaseModule):
 
             await update.callback_query.edit_message_text(f"Done! I'm sending your announcement to {len(users)} eligible community members right now. Hopefully it brightens up their day!")
 
-            for user in users:
-                await self._send_user_message(context, user.telegram_id, message)
+            await convo.send(users, message)
         except UserFriendlyError as e:
             await update.callback_query.edit_message_text(str(e))
         except Exception as e:
             logger.exception(e)
             await update.callback_query.edit_message_text(f"BeeDeeBeeBoop 🤖 Error : {e}")
-
-    @sleep_and_retry
-    @limits(calls=25, period=1)
-    async def _send_user_message(self, context: ContextTypes.DEFAULT_TYPE, telegram_id: int, message: str) -> None:
-        await context.bot.send_message(telegram_id, message, parse_mode=ParseMode.HTML)
 
     async def _cancel(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         try:
@@ -171,19 +163,7 @@ class AnnouncementsModule(BaseModule):
         return [user for user in all_users if self._can_contact_user(user, cutoff)]
 
     def _can_contact_user(self, user: User, cutoff: timedelta|None) -> bool:
-        # People with a telegram id
-        if not user.telegram_id:
-            return False
-
-        # Skip inactive users
-        if user.role == UserRole.INACTIVE:
-            return False
-
-        # If we have a cutoff, make sure the user has visited since that cutoff
-        if cutoff and not self._visits.has_visited_since(user, cutoff):
-            return False
-
-        return True
+        return user.can_contact and (not cutoff or self._visits.has_visited_since(user, cutoff))
 
     async def _send_schedule_announcement(self, context: ContextTypes.DEFAULT_TYPE):
         for target in self._team_schedule_chats:

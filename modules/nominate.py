@@ -1,20 +1,20 @@
 import logging
 import re
+from typing import Callable
+
 import pytz
 from datetime import datetime, time, timedelta
 
-from ratelimit import limits, sleep_and_retry
-
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.constants import ChatType, ParseMode
+from telegram.constants import ChatType
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, filters
 
 from data.models.nomination import Nomination
 from data.models.user import User
-from data.models.user_role import UserRole
 from data.repositories.nomination import NominationRepository
 from data.repositories.user import UserRepository
 from data.repositories.visit import VisitRepository
+from helpers.telegram.conversation_starter import ConversationStarter
 
 from modules.base_module import BaseModule
 from helpers.telegram.exceptions import UserFriendlyError, CommandSyntaxError, UserNotFoundError, MissingUsernameError
@@ -36,6 +36,11 @@ For example:
 Since we have so many people with similar names, I will then help you choose the exact person you need.
 """
 
+NOMINATE_ANNOUNCEMENT: Callable[[User], str] = lambda user: f"""Hey {user.first_name} – thanks for visiting T5 this week! 🙌 Don't forget to check your /balance and our upcoming /events. 
+
+If a community member stood out this week, went the extra mile, brought great vibes, or made the space shine – you can /nominate them now! 💛 
+
+We’ll share your nomination at the end of the month, and they might even be crowned our Community Champion! 🏆"""
 
 class NominateModule(BaseModule):
     def __init__(self, users: UserRepository, visits: VisitRepository, nominations: NominationRepository, timezone: pytz.timezone):
@@ -176,39 +181,12 @@ class NominateModule(BaseModule):
             await update.callback_query.edit_message_text(f"BeeDeeBeeBoop 🤖 Error : {e}")
 
     async def _send_reminders(self, context: ContextTypes.DEFAULT_TYPE) -> None:
-        for user in self._get_contactable_users():
-            message = f"""Hey {user.first_name} – thanks for visiting T5 this week! 🙌 Don't forget to check your /balance and our upcoming /events. 
+        convo = ConversationStarter(context.bot, self._users)
 
-If a community member stood out this week, went the extra mile, brought great vibes, or made the space shine – you can /nominate them now! 💛 
-
-We’ll share your nomination at the end of the month, and they might even be crowned our Community Champion! 🏆"""
-
-            await self._send_user_message(context, user.telegram_id, message)
-
-    @sleep_and_retry
-    @limits(calls=25, period=1)
-    async def _send_user_message(self, context: ContextTypes.DEFAULT_TYPE, telegram_id: int, message: str) -> None:
-        await context.bot.send_message(telegram_id, message, parse_mode=ParseMode.HTML)
-
-    def _get_contactable_users(self) -> list[User]:
         this_monday, last_monday = self._get_mondays()
-        all_users = self._users.get_all()
-        return [user for user in all_users if self._can_contact_user(user, last_monday)]
+        users = [user for user in self._users.get_all() if self._visits.has_visited_since(user, last_monday)]
 
-    def _can_contact_user(self, user: User, cutoff: datetime) -> bool:
-        # People with a telegram id
-        if not user.telegram_id:
-            return False
-
-        # Skip inactive users
-        if user.role == UserRole.INACTIVE:
-            return False
-
-        # Make sure the user has visited since that cutoff
-        if not self._visits.has_visited_since(user, cutoff):
-            return False
-
-        return True
+        await convo.send(users, NOMINATE_ANNOUNCEMENT)
 
     def _get_mondays(self) -> tuple[datetime, datetime]:
         today = datetime.now(self._timezone).replace(hour=0, minute=0, second=0, microsecond=0)
