@@ -17,6 +17,8 @@ class NominationsTable(
     InsertableTable[Nomination, dict[str, str]],
     NominationRepository,
 ):
+    _append_to_top = True
+
     def __init__(self, database: 'Database', sheet_name: str):
         super().__init__(database, sheet_name)
 

@@ -16,6 +16,8 @@ T = TypeVar("T")
 # After extending this class you will have to implement the deserialization method
 # Also, this class implements some of the methods necessary for Insertable and Updatable
 class ColRowTable(ReadableTable[T]):
+    _append_to_top = False
+
     def _parse(self, raw: list[list[str]]) -> list[T]:
         if not raw:
             raise ValueError("The sheet does not contain the necessary data")
@@ -53,7 +55,11 @@ class ColRowTable(ReadableTable[T]):
                 to_append.append(flat_values)
 
             if to_append:
-                worksheet.append_rows(to_append, value_input_option=ValueInputOption.user_entered)
+                if self._append_to_top:
+                    to_append.reverse()
+                    worksheet.insert_rows(to_append, row=2, value_input_option=ValueInputOption.user_entered)
+                else:
+                    worksheet.append_rows(to_append, value_input_option=ValueInputOption.user_entered)
         except Exception as e:
             logger.exception(e)
 
