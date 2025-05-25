@@ -2,7 +2,7 @@ import logging
 import requests
 import json
 import pytz
-from typing import Optional, Generator
+from typing import Optional, Iterable, Iterator
 from datetime import datetime
 
 import helpers.utils.json
@@ -51,24 +51,45 @@ class LoyverseApi:
         customer.points -= points
         self._save_customer(customer)
 
-    def load_visits(self, since: datetime) -> list[RawVisit]:
+    def load_visits(self, since: datetime, end: datetime|None = None) -> list[RawVisit]:
         # Load the receipts and convert them into visits (User + creation date)
-        receipts = self.get_receipts(since)
-        raw_visits = [self._receipt_to_visit(receipt) for receipt in receipts]
-        return [visit for visit in raw_visits if visit]
+        receipts = self.get_receipts(since, end)
+        matched_receipts = self._match_receipts(receipts)
+        return [(user, receipt.created_at) for (receipt, user) in matched_receipts]
 
-    def _receipt_to_visit(self, receipt: Receipt) -> Optional[RawVisit]:
-        if not receipt.customer_id:
-            return None
+    def load_spending(self, start: datetime, end: datetime) -> dict[User, float]:
+        receipts = self.get_receipts(start, end)
 
-        user = self.get_user_by_customer_id(receipt.customer_id)
-        if not user:
-            return None
+        spending = {}
+        for (receipt, user) in self._match_receipts(receipts):
+            # Skip this kind of receipts since they are used when the user pays using points
+            if receipt.total_money < 1.0:
+                continue
 
-        return user, receipt.created_at
+            if user not in spending:
+                spending[user] = 0.0
 
-    def get_receipts(self, since: datetime) -> Generator[Receipt, None, None]:
-        since_utc = since.replace(microsecond=0).astimezone(pytz.utc).isoformat().replace('+00:00', 'Z')
+            spending[user] += receipt.total_money
+
+        return spending
+
+    def _match_receipts(self, receipts: Iterable[Receipt]) -> Iterator[tuple[Receipt, User]]:
+        for receipt in receipts:
+            user = self._receipt_to_user(receipt)
+            if user:
+                yield receipt, user
+
+    def _receipt_to_user(self, receipt: Receipt) -> Optional[User]:
+        return self.get_user_by_customer_id(receipt.customer_id) if receipt.customer_id else None
+
+    def get_receipts(self, start: datetime, end: datetime|None = None) -> Iterator[Receipt]:
+        filters = {
+            'created_at_min': start.replace(microsecond=0).astimezone(pytz.utc).isoformat().replace('+00:00', 'Z')
+        }
+
+        if end:
+            filters['created_at_max'] = end.replace(microsecond=0).astimezone(pytz.utc).isoformat().replace('+00:00', 'Z')
+
         limit = 250
         cursor = None
 
@@ -76,7 +97,7 @@ class LoyverseApi:
         while True:
             response = requests.get(
                 url=self.RECEIPTS_ENDPOINT,
-                params={'created_at_min': since_utc, 'limit': limit, 'cursor': cursor},
+                params={'limit': limit, 'cursor': cursor, **filters},
                 headers={"Authorization": f"Bearer {self.token}"}
             )
 
@@ -89,12 +110,12 @@ class LoyverseApi:
             cursor = response_data.get('cursor')
 
             for raw_receipt in raw_receipts:
-                yield Receipt.from_json(raw_receipt, since.tzinfo)
+                yield Receipt.from_json(raw_receipt, start.tzinfo)
 
             if not cursor or len(raw_receipts) < limit:
                 break
 
-    def get_all_points(self) -> Generator[tuple[User, Points], None, None]:
+    def get_all_points(self) -> Iterator[tuple[User, Points]]:
         for customer in self._get_all_customers():
             user = self.get_user_by_customer_id(customer.customer_id)
             if not user:
@@ -165,7 +186,7 @@ class LoyverseApi:
         self.users.save(user)
         return user
 
-    def _get_all_customers(self) -> Generator[Customer, None, None]:
+    def _get_all_customers(self) -> Iterator[Customer]:
         limit = 250
         cursor = None
 

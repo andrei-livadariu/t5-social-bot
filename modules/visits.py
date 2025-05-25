@@ -1,4 +1,6 @@
 import logging
+from math import floor
+
 import pytz
 from datetime import datetime, timedelta, date, time
 
@@ -45,7 +47,7 @@ class VisitsModule(BaseModule):
         application.job_queue.run_repeating(callback=self._update_visits, interval=60 * 5)
 
         monthly_time = time(0, 5, 0, 0, self.timezone) # Midnight plus a few minutes to leave room for other messages
-        application.job_queue.run_monthly(self._announce_top_visits, when=monthly_time, day=1)
+        application.job_queue.run_monthly(self._monthly_announcements, when=monthly_time, day=1)
 
         logger.info(f"Visits module installed")
 
@@ -102,12 +104,19 @@ class VisitsModule(BaseModule):
         else:
             await update.message.reply_html(reply, disable_web_page_preview=True)
 
-    async def _announce_top_visits(self, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def _monthly_announcements(self, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not self._admin_chats:
             return
 
-        last_month = datetime.now(self.timezone).replace(day=1) - timedelta(days=1)
-        raw_visitors = self.vc.get_visitors_in_month(last_month)
+        first_day_of_this_month = datetime.now(self.timezone).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        last_day_of_previous_month = first_day_of_this_month - timedelta(days=1)
+        first_day_of_previous_month = last_day_of_previous_month.replace(day=1)
+
+        await self._announce_top_visits(first_day_of_previous_month, context)
+        await self._announce_top_spenders(first_day_of_previous_month, first_day_of_this_month, context)
+
+    async def _announce_top_visits(self, month: datetime, context: ContextTypes.DEFAULT_TYPE) -> None:
+        raw_visitors = self.vc.get_visitors_in_month(month)
         linked_visitors = [(self.users.get_by_full_name(full_name), visits) for full_name, visits in raw_visitors]
         visitors = [(user, visits) for user, visits in linked_visitors if user]
 
@@ -117,11 +126,30 @@ class VisitsModule(BaseModule):
             lines = [f"{i + 1}. {user.full_name} - {visits} visits" for i, (user, visits) in enumerate(top_10)]
 
             announcement = "\n\n".join([
-                f"<b>Here are the top 10 visitors in the month of {last_month.strftime('%B')}:</b>",
+                f"<b>Here are the top 10 visitors in the month of {month.strftime('%B')}:</b>",
                 "\n".join(lines),
             ])
         else:
             announcement = "Unlikely as it is, no community members visited this month."
+
+        for target in self._admin_chats:
+            await context.bot.send_message(target.chat_id, announcement, parse_mode=ParseMode.HTML, message_thread_id=target.thread_id)
+
+    async def _announce_top_spenders(self, start: datetime, end: datetime, context: ContextTypes.DEFAULT_TYPE) -> None:
+        spending = self.loy.load_spending(start, end)
+        filtered_spending = {user: spending for user, spending in spending.items() if not user.role.is_staff}
+
+        if filtered_spending:
+            sorted_spending = sorted(filtered_spending.items(), key=lambda entry: entry[1], reverse=True)
+            top_10 = sorted_spending[:10]
+            lines = [f"{i + 1}. {user.full_name} - {floor(amount)} lei" for i, (user, amount) in enumerate(top_10)]
+
+            announcement = "\n\n".join([
+                f"<b>Here are the top 10 spenders in the month of {start.strftime('%B')}:</b>",
+                "\n".join(lines),
+            ])
+        else:
+            announcement = "Unlikely as it is, no community members spent any money this month."
 
         for target in self._admin_chats:
             await context.bot.send_message(target.chat_id, announcement, parse_mode=ParseMode.HTML, message_thread_id=target.thread_id)
@@ -145,7 +173,7 @@ class VisitsModule(BaseModule):
     async def _send_messages(self, updates: dict[User, ReachedCheckpoints], right_now: datetime, context: ContextTypes.DEFAULT_TYPE):
         updates_with_points = {user: points for user, points in updates.items() if points and VisitsModule._can_earn_points(user)}
 
-        prepared_announcements: dict[date, dict[User, (Points, str)]] = {}
+        prepared_announcements: dict[date, dict[User, tuple[Points, str]]] = {}
 
         for user, month_checkpoints in updates_with_points.items():
             for month, checkpoints in month_checkpoints.items():
