@@ -64,7 +64,7 @@ class BirthdayModule(BaseModule):
 
         convo = ConversationStarter(context.bot, self.users)
         await convo.send(
-            recipients=users,
+            recipients=list(users),
             message=lambda user: {
                 'text': BIRTHDAY_MESSAGE(user, self.points_to_award),
                 'reply_markup': PointsClaim(self.points_to_award).keyboard(),
