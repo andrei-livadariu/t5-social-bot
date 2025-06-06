@@ -23,11 +23,11 @@ class UsersTable(
         super().__init__(database, sheet_name)
 
         self._by_full_name = UniqueIndex[User, str](lambda user: user.full_name, self._lock)
-        self._by_telegram_id = UniqueIndex(lambda user: user.telegram_id, self._lock)
-        self._by_telegram_name = UniqueIndex(lambda user: user.telegram_username, self._lock)
-        self._by_loyverse_id = UniqueIndex(lambda user: user.loyverse_id, self._lock)
-        self._by_birthday = BucketIndex(lambda user: user.birthday, self._lock)
-        self._by_prefix = PrefixSearchIndex(UsersTable._search_keys, self._lock)
+        self._by_telegram_id = UniqueIndex[User, int|None](lambda user: user.telegram_id, self._lock)
+        self._by_telegram_name = UniqueIndex[User, str](lambda user: user.telegram_username, self._lock)
+        self._by_loyverse_id = UniqueIndex[User, str|None](lambda user: user.loyverse_id, self._lock)
+        self._by_birthday = BucketIndex[User, str|None](lambda user: user.birthday, self._lock)
+        self._by_prefix = PrefixSearchIndex[User](UsersTable._search_keys, self._lock)
 
     def get_all(self) -> list[User]:
         return list(self._by_full_name.raw().values())

@@ -7,31 +7,35 @@ from integrations.google.sheets.contracts.index import Index
 ModelType = TypeVar("ModelType")
 KeyType = TypeVar("KeyType")
 
+KeyPredicate = Callable[[ModelType], Optional[KeyType]]
+
 class BucketIndex(
     Index[ModelType, KeyType, set[ModelType]]
 ):
-    def __init__(self, key: Callable[[ModelType], Optional[KeyType]], shared_lock: RWLockWrite = None):
+    def __init__(self, key: KeyPredicate|list[KeyPredicate], shared_lock: RWLockWrite = None):
         super().__init__(shared_lock)
-        self._key = key
+        self._keys = key.copy() if isinstance(key, list) else [key]
 
     def _insert_inner(self, model: ModelType) -> None:
-        key = self._key(model)
-        if key is None:
-            return
+        for predicate in self._keys:
+            key = predicate(model)
+            if key is None:
+                return
 
-        if key not in self._data:
-            self._data[key] = set()
+            if key not in self._data:
+                self._data[key] = set()
 
-        self._data[key].add(model)
+            self._data[key].add(model)
 
     def _delete_inner(self, model: ModelType) -> None:
-        key = self._key(model)
-        if key is None:
-            return
+        for predicate in self._keys:
+            key = predicate(model)
+            if key is None:
+                return
 
-        if key not in self._data:
-            return
+            if key not in self._data:
+                return
 
-        self._data[key].remove(model)
-        if len(self._data[key]) == 0:
-            del self._data[key]
+            self._data[key].remove(model)
+            if len(self._data[key]) == 0:
+                del self._data[key]

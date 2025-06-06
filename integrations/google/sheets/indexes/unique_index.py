@@ -7,23 +7,27 @@ from integrations.google.sheets.contracts.index import Index
 ModelType = TypeVar("ModelType")
 KeyType = TypeVar("KeyType")
 
+KeyPredicate = Callable[[ModelType], Optional[KeyType]]
+
 class UniqueIndex(
     Index[ModelType, KeyType, ModelType]
 ):
-    def __init__(self, key: Callable[[ModelType], Optional[KeyType]], shared_lock: RWLockWrite = None):
+    def __init__(self, key: KeyPredicate|list[KeyPredicate], shared_lock: RWLockWrite = None):
         super().__init__(shared_lock)
-        self._key = key
+        self._keys = key.copy() if isinstance(key, list) else [key]
 
     def _insert_inner(self, model: ModelType) -> None:
-        key = self._key(model)
-        if key is None:
-            return
+        for predicate in self._keys:
+            key = predicate(model)
+            if key is None:
+                return
 
-        self._data[key] = model
+            self._data[key] = model
 
     def _delete_inner(self, model: ModelType) -> None:
-        key = self._key(model)
-        if key is None:
-            return
+        for predicate in self._keys:
+            key = predicate(model)
+            if key is None:
+                return
 
-        del self._data[key]
+            del self._data[key]

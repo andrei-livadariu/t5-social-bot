@@ -23,7 +23,7 @@ class NominationsTable(
         super().__init__(database, sheet_name)
 
         self._by_voter = SortedBucketIndex[Nomination, str](
-            key=lambda nomination: nomination.voted_by,
+            keys=lambda nomination: nomination.voted_by,
             sorter=lambda nomination: nomination.date,
             shared_lock=self._lock,
         )
