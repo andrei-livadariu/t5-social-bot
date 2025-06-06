@@ -3,12 +3,15 @@ import os
 import pytz
 import json
 
+from datetime import datetime
+
 from telegram.ext import ApplicationBuilder
 from dotenv import load_dotenv
 
 from helpers.business_logic.access_checker import AccessChecker
 from helpers.business_logic.visit_calculator import VisitCalculator
 from helpers.business_logic.points import Points
+from helpers.business_logic.raffle import Raffle
 from helpers.telegram.chat_target import ChatTarget
 from integrations.google.api import GoogleApi
 from integrations.google.sheets.databases.visits_database import VisitsDatabase
@@ -17,10 +20,12 @@ from integrations.loyverse.api import LoyverseApi
 from integrations.google.sheets.databases.community_database import CommunityDatabase
 from integrations.google.sheets.databases.management_database import ManagementDatabase
 
+from modules.base_module import BaseModule
 from modules.help import HelpModule
 from modules.nominate import NominateModule
 from modules.points import PointsModule
 from modules.donate import DonateModule
+from modules.raffle import RaffleModule
 from modules.birthday import BirthdayModule
 from modules.events import EventsModule
 from modules.visits import VisitsModule
@@ -90,7 +95,24 @@ def main() -> None:
         visits=visits.visits,
     )
 
-    modules = [
+    raffle = Raffle(
+        loy=loy,
+        users=community.users,
+        entries=community.raffle_entries,
+        title="Zăganu Giveaway",
+        description="""Summer is finally here ☀️ and what better way to celebrate than with a nice, cold beer? 🍺 
+
+We’re now serving ZAGANU on tap, and we’re giving away a Hefeweizen and an IPA to a couple of lucky community members!
+
+The deadline is Sunday @ 4pm
+
+Noroc & good luck! 🍻""",
+        end_date=config.timezone.localize(datetime(2025, 6, 8, 16, 0, 0, 0)),
+        ticket_price=Points(0),
+        max_tickets=1
+    )
+
+    modules: list[BaseModule] = [
         PointsModule(loy=loy, users=community.users, visits=visits.visits, timezone=config.timezone),
         DonateModule(loy=loy, ac=ac, users=community.users, announcement_chats=config.announcement_chats),
         VisitsModule(
@@ -129,6 +151,7 @@ def main() -> None:
             nominations=community.nominations,
             timezone=config.timezone,
         ),
+        RaffleModule(raffle=raffle, users=community.users),
         TrackingModule(users=community.users, timezone=config.timezone),
     ]
 
