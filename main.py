@@ -10,19 +10,22 @@ from dotenv import load_dotenv
 
 from helpers.business_logic.access_checker import AccessChecker
 from helpers.business_logic.visit_calculator import VisitCalculator
+from helpers.business_logic.ping_pong_calculator import PingPongCalculator
 from helpers.business_logic.points import Points
 from helpers.business_logic.raffle import Raffle
 from helpers.telegram.chat_target import ChatTarget
 from integrations.google.api import GoogleApi
-from integrations.google.sheets.databases.visits_database import VisitsDatabase
-
 from integrations.loyverse.api import LoyverseApi
+
 from integrations.google.sheets.databases.community_database import CommunityDatabase
 from integrations.google.sheets.databases.management_database import ManagementDatabase
+from integrations.google.sheets.databases.ping_pong_database import PingPongDatabase
+from integrations.google.sheets.databases.visits_database import VisitsDatabase
 
 from modules.base_module import BaseModule
 from modules.help import HelpModule
 from modules.nominate import NominateModule
+from modules.ping_pong import PingPongModule
 from modules.points import PointsModule
 from modules.donate import DonateModule
 from modules.raffle import RaffleModule
@@ -48,6 +51,7 @@ class MainConfig:
         self.admin_chats = ChatTarget.parse_multi(os.getenv('admin_chats', ''))
         self.tasks_chats = ChatTarget.parse_multi(os.getenv('tasks_chats', ''))
         self.team_schedule_chats = ChatTarget.parse_multi(os.getenv('team_schedule_chats', ''))
+        self.ping_pong_chats = ChatTarget.parse_multi(os.getenv('ping_pong_chats', ''))
         self.birthday_points = Points(os.getenv('birthday_points', 5))
         self.timezone = pytz.timezone(os.getenv('timezone', 'Europe/Bucharest'))
         self.masters = set([username for username in os.getenv('masters', '').split(',') if username])
@@ -56,6 +60,7 @@ class MainConfig:
         self.community_google_spreadsheet_key = os.getenv('community_google_spreadsheet_key')
         self.management_google_spreadsheet_key = os.getenv('management_google_spreadsheet_key')
         self.visits_google_spreadsheet_key = os.getenv('visits_google_spreadsheet_key')
+        self.ping_pong_google_spreadsheet_key = os.getenv('ping_pong_google_spreadsheet_key')
         self.xmas_loyverse_id = os.getenv('xmas_loyverse_id')
         self.visits_to_points = {int(visits): Points(points) for visits, points in json.loads(os.getenv('visits_to_points') or '{}').items()}
 
@@ -84,6 +89,12 @@ def main() -> None:
         timezone=config.timezone
     )
 
+    ping_pong = PingPongDatabase(
+        api=google_api,
+        spreadsheet_key=config.ping_pong_google_spreadsheet_key,
+        timezone=config.timezone
+    )
+
     loy = LoyverseApi(config.loyverse_token, users=community.users, read_only=config.loyverse_read_only)
     ac = AccessChecker(
         masters=config.masters,
@@ -93,6 +104,12 @@ def main() -> None:
     vc = VisitCalculator(
         checkpoints=config.visits_to_points,
         visits=visits.visits,
+    )
+
+    ppc = PingPongCalculator(
+        standings=ping_pong.standings,
+        matches=ping_pong.matches,
+        timezone=config.timezone,
     )
 
     raffle = Raffle(
@@ -137,6 +154,11 @@ Noroc & good luck! 🍻""",
             announcement_chats=config.announcement_chats,
             admin_chats=config.admin_chats,
         ),
+        PingPongModule(
+            users=community.users,
+            calculator=ppc,
+            chats=config.ping_pong_chats,
+        ),
         TasksModule(tasks=management.tasks, tasks_chats=config.tasks_chats, timezone=config.timezone),
         AnnouncementsModule(
             ac=ac,
@@ -166,6 +188,7 @@ Noroc & good luck! 🍻""",
     application.job_queue.run_repeating(callback=community.refresh_job, interval=60 * 5)  # Refresh every 5 minutes
     application.job_queue.run_repeating(callback=management.refresh_job, interval=60 * 5)  # Refresh every 5 minutes
     application.job_queue.run_repeating(callback=visits.refresh_job, interval=60 * 5)  # Refresh every 5 minutes
+    application.job_queue.run_repeating(callback=ping_pong.refresh_job, interval=60 * 5)  # Refresh every 5 minutes
 
     # Start the Bot
     logger.info('start_polling')

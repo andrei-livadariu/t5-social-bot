@@ -27,9 +27,12 @@ class User:
         return self.aliases[0] if self.aliases else None
 
     @property
+    def friendly_first_name(self) -> str:
+        return self.main_alias or self.first_name
+
+    @property
     def friendly_name(self) -> str:
-        name = self.main_alias or self.first_name
-        return name + (f" / @{self.telegram_username}" if self.telegram_username else "")
+        return self.friendly_first_name + (f" / @{self.telegram_username}" if self.telegram_username else "")
 
     @property
     def specific_name(self) -> str:
