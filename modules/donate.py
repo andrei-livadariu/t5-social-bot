@@ -77,7 +77,7 @@ class DonateModule(BaseModule):
             if not recipient:
                 # This passthrough is parsed by the private chat, so you can continue donating to the same user
                 passthrough = f"donate_{recipient_name.replace(' ', '-')}_{points}"
-                await update.message.reply_html(f"There is more than one person who goes by that name. Please <a href=\"https://t.me/T5socialBot?start={passthrough}\">contact me in private</a> so I can help you find the right one.")
+                await update.message.reply_html(f"There is more than one person who goes by that name. Please <a href=\"https://t.me/T5socialBot?start={passthrough}\">contact me in private</a> so I can help you find the right one.", disable_web_page_preview=True)
                 return
 
             self._execute_donation(sender, recipient, points)

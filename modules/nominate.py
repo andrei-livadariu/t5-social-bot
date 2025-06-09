@@ -120,7 +120,7 @@ class NominateModule(BaseModule):
         except CommandSyntaxError:
             await update.message.reply_text(NOMINATE_HELP_TEXT, do_quote=False)
         except UserFriendlyError as e:
-            await update.message.reply_html(str(e), do_quote=False)
+            await update.message.reply_html(str(e), do_quote=False, disable_web_page_preview=True)
         except Exception as e:
             logger.exception(e)
             await update.message.reply_text(f"BeeDeeBeeBoop 🤖 Error : {e}", do_quote=False)
