@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import TypeVar, Generic, Dict, Any, Optional
+from typing import TypeVar, Generic, Dict, Any
 
 from readerwriterlock.rwlock import RWLockable
 

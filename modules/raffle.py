@@ -1,5 +1,4 @@
 import logging
-from typing import Callable
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
