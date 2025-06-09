@@ -128,7 +128,7 @@ class VisitsTable(
         return columns
 
     @staticmethod
-    def _get_months_indexes(columns: dict[str, int]) -> list[(date, int)]:
+    def _get_months_indexes(columns: dict[str, int]) -> list[tuple[date, int]]:
         raw_indexes = [[VisitsTable._parse_month(column), index] for column, index in columns.items()]
         return [(month, index) for month, index in raw_indexes if month]
 
@@ -143,7 +143,7 @@ class VisitsTable(
         return {month for month in raw_months if month}
 
     @staticmethod
-    def _insert_month_columns(worksheet: gspread.Worksheet, months: set[date], indexes: list[(date, int)]) -> list[(date, int)]:
+    def _insert_month_columns(worksheet: gspread.Worksheet, months: set[date], indexes: list[tuple[date, int]]) -> list[tuple[date, int]]:
         # This method inserts any missing months
         # Example:
         # months: apr mar jan
